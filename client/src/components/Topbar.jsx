@@ -1,6 +1,10 @@
 import React from 'react'
 
-export default function Topbar({title, managers}){
+export default function Topbar({title, managers, profile}){
+  const name = profile?.name || 'Owner Name';
+  const photo = profile?.photo ? `data:image/jpeg;base64,${profile.photo}` : '';
+  const initials = name.trim().charAt(0).toUpperCase() || 'O';
+
   return (
     <div className="topbar-inner">
       <div className="page-title">{title}</div>
@@ -12,13 +16,16 @@ export default function Topbar({title, managers}){
 
         <div className="managers-stack">
           {managers.slice(0,4).map((m,i)=> (
-            <div key={i} className="avatar" title={m.email}>{m.email[0].toUpperCase()}</div>
+            <div key={i} className="avatar" title={m.email}>{(m.email || '?')[0].toUpperCase()}</div>
           ))}
           {managers.length>4 && <div className="avatar more">+{managers.length-4}</div>}
         </div>
 
-        <div className="profile">
-          <div className="profile-name">Owner Name <span className="caret">▾</span></div>
+        <div className="profile" title={profile?.email || name}>
+          <div className="profile-avatar">
+            {photo ? <img src={photo} alt={name} /> : initials}
+          </div>
+          <div className="profile-name">{name} <span className="caret">▾</span></div>
         </div>
       </div>
     </div>
