@@ -41,7 +41,8 @@ export default function App(){
       if(e.key.toLowerCase()==='n'){
         const active = document.activeElement;
         if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA' || active.isContentEditable)) return;
-        window.dispatchEvent(new CustomEvent('openPostModal'));
+        setRoute('list');
+        setTimeout(()=>window.dispatchEvent(new CustomEvent('openPostModal')), 0);
       }
       if(e.key==='?') alert('Keyboard shortcuts:\nN — New post\n? — Help');
     }
@@ -63,13 +64,7 @@ export default function App(){
           {route==='calendar' && <CalendarView />}
         </main>
       </div>
-      <div style={{position:'fixed',right:28,bottom:28,display:'flex',flexDirection:'column',gap:8,alignItems:'flex-end'}}>
-        <button className="fab" onClick={()=>window.dispatchEvent(new CustomEvent('openBulkModal'))} title="Bulk Create">Bulk</button>
-        <button className="fab" onClick={()=>window.dispatchEvent(new CustomEvent('openPostModal'))} title="New Scheduled Post">
-          <span className="fab-icon">+</span><span className="fab-label">New Scheduled Post</span><span className="fab-shortcut">N</span>
-        </button>
-      </div>
-      <div id="bulkModal" className="modal hidden">{/* Bulk modal rendered by event listener in App mount */}</div>
+      {/* Floating actions are rendered only on pages that use them; the generic fixed container was removed. */}
     </div>
   )
 }
