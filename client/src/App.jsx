@@ -37,12 +37,35 @@ export default function App(){
   },[])
 
   useEffect(()=>{
+    const openPost = () => {
+      setRoute('list');
+      setTimeout(()=>window.dispatchEvent(new CustomEvent('openPostModal')), 50);
+    };
+    const openBulk = () => {
+      setRoute('list');
+      setTimeout(()=>window.dispatchEvent(new CustomEvent('openBulkModal')), 50);
+    };
+    window.addEventListener('openPostModal', openPost);
+    window.addEventListener('openBulkModal', openBulk);
+    return ()=>{
+      window.removeEventListener('openPostModal', openPost);
+      window.removeEventListener('openBulkModal', openBulk);
+    };
+  },[])
+
+  useEffect(()=>{
+    const onNavigateToList = ()=>setRoute('list');
+    window.addEventListener('navigateToList', onNavigateToList);
+    return ()=>window.removeEventListener('navigateToList', onNavigateToList);
+  },[])
+
+  useEffect(()=>{
     const onKey = (e)=>{
       if(e.key.toLowerCase()==='n'){
         const active = document.activeElement;
         if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA' || active.isContentEditable)) return;
         setRoute('list');
-        setTimeout(()=>window.dispatchEvent(new CustomEvent('openPostModal')), 0);
+        setTimeout(()=>window.dispatchEvent(new CustomEvent('openPostModal')), 50);
       }
       if(e.key==='?') alert('Keyboard shortcuts:\nN — New post\n? — Help');
     }
@@ -64,7 +87,6 @@ export default function App(){
           {route==='calendar' && <CalendarView />}
         </main>
       </div>
-      {/* Floating actions are rendered only on pages that use them; the generic fixed container was removed. */}
     </div>
   )
 }
