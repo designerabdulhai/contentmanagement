@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// Use VITE_API_URL in production, while keeping the local development default.
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+// Same-origin /api works automatically when the React build is served by Express.
+// Set VITE_API_URL only when the API is hosted on a separate domain/subdomain.
+const baseURL = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
   baseURL,
