@@ -1,0 +1,10 @@
+name = "contentmanagement-api"
+main = "src/index.js"
+compatibility_date = "2026-08-22"
+
+# After creating the D1 database in Cloudflare, copy its database_id
+# into the line below, then deploy with: npx wrangler deploy
+[[d1_databases]]
+binding = "DB"
+database_name = "contentmanagement"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
