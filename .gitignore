@@ -1,0 +1,7 @@
+.DS_Store
+._*
+vendor/
+node_modules/
+.env
+.env.*
+!.env.example

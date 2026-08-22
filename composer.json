@@ -1,0 +1,10 @@
+{
+    "require-dev": {
+        "laravel/breeze": "*"
+    },
+    "config": {
+        "audit": {
+            "block-insecure": false
+        }
+    }
+}
