@@ -10,17 +10,16 @@ export default function ListView(){
   useEffect(()=>{ load();
     const onOpen = ()=>document.getElementById('createModal')?.classList.remove('hidden');
     window.addEventListener('openPostModal', onOpen);
-    const onNav = ()=>{ // support pre-filter from dashboard
+    const onNav = ()=>{
       if(localStorage.getItem('list_filter_dueSoon')){ setFilters(f=>({...f, dueSoon:true})); localStorage.removeItem('list_filter_dueSoon'); }
     }
     window.addEventListener('navigateToList', onNav);
     return ()=>{ window.removeEventListener('openPostModal', onOpen); window.removeEventListener('navigateToList', onNav); };
   },[])
 
-  const currentUserId = 1; // simulated
+  const currentUserId = 1;
   const [myPostsOnly, setMyPostsOnly] = useState(localStorage.getItem('my_posts')==='1');
   const load = ()=> api.get('/posts').then(r=> setPosts(r.data)).catch(()=>{});
-
   const deletePost = (id)=>{ api.delete('/posts/'+id).then(()=>load()); }
 
   return (
@@ -30,7 +29,14 @@ export default function ListView(){
           <input className="search" placeholder="Search posts" value={filters.search} onChange={e=>setFilters({...filters,search:e.target.value})} />
           <button className={myPostsOnly? 'active':''} onClick={()=>{ setMyPostsOnly(s=>{ const v=!s; localStorage.setItem('my_posts', v?'1':'0'); return v; }); }}>My Posts</button>
         </div>
-        <div className="list-actions">Sort • Filters • Bulk</div>
+        <div className="list-actions">
+          <button className="list-tool-btn" type="button">Sort</button>
+          <button className="list-tool-btn" type="button">Filters</button>
+          <button className="btn-secondary" type="button" onClick={()=>window.dispatchEvent(new CustomEvent('openBulkModal'))}>Bulk</button>
+          <button className="btn-primary" type="button" onClick={()=>document.getElementById('createModal')?.classList.remove('hidden')}>
+            <span className="new-post-plus">+</span> New Scheduled Post <span className="fab-shortcut">N</span>
+          </button>
+        </div>
       </div>
 
       <div className="table-wrap card">
