@@ -59,11 +59,9 @@ export default function Settings(){
     setSavingProfile(true);
     setProfileMessage('');
     try {
-      await Promise.all([
-        save('profile_name', [profile.name.trim()]),
-        save('profile_email', [profile.email.trim()]),
-        save('profile_photo', [profile.photo || '']),
-      ]);
+      await save('profile_name', [profile.name.trim()]);
+      await save('profile_email', [profile.email.trim()]);
+      await save('profile_photo', [profile.photo || '']);
       window.dispatchEvent(new CustomEvent('profileUpdated', { detail: profile }));
       setProfileMessage('Profile saved successfully.');
     } catch (error) {
