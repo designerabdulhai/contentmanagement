@@ -31,6 +31,19 @@ function settingObject(rows) {
   return out;
 }
 
+function formatSuggestedDate(value) {
+  const date = parseDate(value);
+  if (!date) return String(value || '');
+  return date.toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 async function body(request) {
   try {
     return await request.json();
@@ -66,26 +79,40 @@ async function handle(request, env) {
     const q = String(url.searchParams.get('query') || '').trim();
     if (!q) return json([]);
     const result = await db.prepare(`
-      SELECT project_name, scheduled_at, channel, status FROM posts
+      SELECT project_name, scheduled_at, channel, status
+      FROM posts
       WHERE project_name IS NOT NULL AND lower(project_name) LIKE ?
-      ORDER BY scheduled_at DESC
+      ORDER BY scheduled_at IS NULL, scheduled_at DESC
     `).bind(`%${q.toLowerCase()}%`).all();
+
     const map = {};
     for (const r of result.results || []) {
       const name = r.project_name;
-      if (!map[name]) map[name] = { project_name: name, last_scheduled: [], count: 0 };
+      if (!map[name]) {
+        map[name] = {
+          project_name: name,
+          last_scheduled: [],
+          count: 0,
+        };
+      }
       map[name].count += 1;
       if (r.scheduled_at) map[name].last_scheduled.push(r);
     }
-    return json(Object.values(map).map(item => ({
-      project_name: item.project_name,
-      last_scheduled_dates: item.last_scheduled.slice(0, 5).map(s => {
-        const d = new Date(s.scheduled_at);
-        const label = Number.isNaN(d.getTime()) ? s.scheduled_at : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        return `${label} · ${s.channel || ''} · ${s.status || ''}`;
-      }),
-      count: item.count,
-    })));
+
+    return json(Object.values(map).map(item => {
+      const latest = item.last_scheduled[0] || null;
+      return {
+        project_name: item.project_name,
+        count: item.count,
+        last_scheduled_at: latest?.scheduled_at || null,
+        last_scheduled_dates: item.last_scheduled.slice(0, 5).map(s => ({
+          scheduled_at: s.scheduled_at,
+          label: formatSuggestedDate(s.scheduled_at),
+          channel: s.channel || '',
+          status: s.status || '',
+        })),
+      };
+    }));
   }
 
   if (method === 'POST' && path === '/api/posts/bulk') {
@@ -263,7 +290,7 @@ async function handle(request, env) {
   if (method === 'POST' && path === '/api/invite') {
     const p = await body(request);
     const email = String(p.email || '').trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'valid email required' }, 400);
+    if (!/^([^\s@]+)@([^\s@]+)\.([^\s@]+)$/.test(email)) return json({ error: 'valid email required' }, 400);
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
     const token = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -285,11 +312,11 @@ async function handle(request, env) {
       db.prepare("SELECT COUNT(*) AS c FROM posts WHERE is_overdue=1"),
     ]);
     return json({
-      total: total.results?.[0]?.c || 0,
-      scheduledWeek: scheduledWeek.results?.[0]?.c || 0,
-      uploadedMonth: uploadedMonth.results?.[0]?.c || 0,
-      listedCount: listedCount.results?.[0]?.c || 0,
-      overdue: overdue.results?.[0]?.c || 0,
+      total: total.results[0]?.c || 0,
+      scheduledWeek: scheduledWeek.results[0]?.c || 0,
+      uploadedMonth: uploadedMonth.results[0]?.c || 0,
+      listedCount: listedCount.results[0]?.c || 0,
+      overdue: overdue.results[0]?.c || 0,
     });
   }
 
@@ -297,12 +324,7 @@ async function handle(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
-    try {
-      return await handle(request, env);
-    } catch (error) {
-      console.error(error);
-      return json({ error: 'internal server error', message: error?.message || String(error) }, 500);
-    }
+  fetch(request, env) {
+    return handle(request, env).catch(err => json({ error: err?.message || 'internal server error' }, 500));
   },
 };
