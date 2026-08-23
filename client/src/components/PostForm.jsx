@@ -97,25 +97,29 @@ export default function PostForm({onSaved,onCancel}){
   }
 
   const queryProjectSuggestions = (q)=>{
-    if(!q) { setSuggestions([]); setShowSuggestions(false); return; }
-    const key = q.toLowerCase();
+    const key = String(q || '').trim().toLowerCase();
+    if(!key) { setSuggestions([]); setShowSuggestions(false); return; }
     if(suggestionsCache.current[key]){
       setSuggestions(suggestionsCache.current[key]);
       setShowSuggestions(true);
       return;
     }
     api.get('/posts/project-suggestions', { params: { query: q } }).then(res=>{
-      suggestionsCache.current[key] = Array.isArray(res.data) ? res.data : [];
-      setSuggestions(suggestionsCache.current[key]);
-      setShowSuggestions(true);
-    }).catch(()=>{});
+      const data = Array.isArray(res.data) ? res.data : [];
+      suggestionsCache.current[key] = data;
+      setSuggestions(data);
+      setShowSuggestions(data.length > 0);
+    }).catch(()=>{
+      setSuggestions([]);
+      setShowSuggestions(false);
+    });
   }
 
   const onProjectNameChange = (val)=>{
     setPost({...post, project_name: val});
     setSelectedProjectPanel(null);
     if(debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(()=> queryProjectSuggestions(val), 300);
+    debounceRef.current = setTimeout(()=> queryProjectSuggestions(val), 250);
   }
 
   const selectSuggestion = (s)=>{
@@ -126,10 +130,13 @@ export default function PostForm({onSaved,onCancel}){
   }
 
   const maybeShowPanelForName = (name)=>{
-    if(!name) return;
-    const key = name.toLowerCase();
-    const found = suggestionsCache.current[key] || suggestions.find(x=>x.project_name.toLowerCase()===key);
-    if(found){ setSelectedProjectPanel(found); setPanelOpen(true); }
+    const key = String(name || '').trim().toLowerCase();
+    if(!key) return;
+    const found = suggestionsCache.current[key] || suggestions.find(x=>x.project_name?.toLowerCase()===key);
+    if(found){
+      setSelectedProjectPanel(found);
+      setPanelOpen(true);
+    }
   }
 
   const contentTypes = Array.isArray(settings.content_types) ? settings.content_types : [];
@@ -143,8 +150,13 @@ export default function PostForm({onSaved,onCancel}){
       {settingsError && <div className="setting-help form-error">{settingsError}</div>}
       <div className="form-grid">
         <div className="project-field">
-          <input placeholder="Project Name" value={post.project_name||''} onChange={e=>onProjectNameChange(e.target.value)} onBlur={(e)=>{ setTimeout(()=>setShowSuggestions(false), 180); maybeShowPanelForName(e.target.value); }} />
-
+          <input
+            placeholder="Project Name"
+            value={post.project_name||''}
+            onChange={e=>onProjectNameChange(e.target.value)}
+            onFocus={e=>{ if(e.target.value) queryProjectSuggestions(e.target.value); }}
+            onBlur={e=>{ setTimeout(()=>{ setShowSuggestions(false); maybeShowPanelForName(e.target.value); }, 180); }}
+          />
           {showSuggestions && suggestions.length>0 && (
             <div className="suggestions-dropdown">
               {suggestions.map(s=> (
