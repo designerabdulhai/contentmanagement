@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import BulkCreate from './components/BulkCreate'
 import './styles.css'
+import './post-form-fix.css'
 
 createRoot(document.getElementById('root')).render(
   React.createElement(App)
@@ -17,4 +18,3 @@ window.addEventListener('openBulkModal', ()=>{
   bulkRoot = createRoot(modal);
   bulkRoot.render(React.createElement(BulkCreate, { onClose: ()=>{ modal.classList.add('hidden'); bulkRoot && bulkRoot.unmount(); bulkRoot = null; }, onDone: ()=>{ modal.classList.add('hidden'); bulkRoot && bulkRoot.unmount(); bulkRoot = null; } }))
 });
-
