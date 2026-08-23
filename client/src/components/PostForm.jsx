@@ -25,6 +25,7 @@ export default function PostForm({onSaved,onCancel}){
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestionsCache = useRef({});
   const debounceRef = useRef(null);
+  const requestSeqRef = useRef(0);
   const [selectedProjectPanel, setSelectedProjectPanel] = useState(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const [templates, setTemplates] = useState([]);
@@ -97,19 +98,24 @@ export default function PostForm({onSaved,onCancel}){
   }
 
   const queryProjectSuggestions = (q)=>{
-    const key = String(q || '').trim().toLowerCase();
+    const raw = String(q || '').trim();
+    const key = raw.toLowerCase();
     if(!key) { setSuggestions([]); setShowSuggestions(false); return; }
-    if(suggestionsCache.current[key]){
-      setSuggestions(suggestionsCache.current[key]);
-      setShowSuggestions(true);
+    const cached = suggestionsCache.current[key];
+    if(Array.isArray(cached)){
+      setSuggestions(cached);
+      setShowSuggestions(cached.length > 0);
       return;
     }
-    api.get('/posts/project-suggestions', { params: { query: q } }).then(res=>{
+    const requestId = ++requestSeqRef.current;
+    api.get('/posts/project-suggestions', { params: { query: raw } }).then(res=>{
+      if(requestId !== requestSeqRef.current) return;
       const data = Array.isArray(res.data) ? res.data : [];
       suggestionsCache.current[key] = data;
       setSuggestions(data);
       setShowSuggestions(data.length > 0);
     }).catch(()=>{
+      if(requestId !== requestSeqRef.current) return;
       setSuggestions([]);
       setShowSuggestions(false);
     });
@@ -119,7 +125,7 @@ export default function PostForm({onSaved,onCancel}){
     setPost({...post, project_name: val});
     setSelectedProjectPanel(null);
     if(debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(()=> queryProjectSuggestions(val), 250);
+    debounceRef.current = setTimeout(()=> queryProjectSuggestions(val), 180);
   }
 
   const selectSuggestion = (s)=>{
@@ -133,10 +139,7 @@ export default function PostForm({onSaved,onCancel}){
     const key = String(name || '').trim().toLowerCase();
     if(!key) return;
     const found = suggestionsCache.current[key] || suggestions.find(x=>x.project_name?.toLowerCase()===key);
-    if(found){
-      setSelectedProjectPanel(found);
-      setPanelOpen(true);
-    }
+    if(found){ setSelectedProjectPanel(found); setPanelOpen(true); }
   }
 
   const contentTypes = Array.isArray(settings.content_types) ? settings.content_types : [];
@@ -153,9 +156,11 @@ export default function PostForm({onSaved,onCancel}){
           <input
             placeholder="Project Name"
             value={post.project_name||''}
+            autoComplete="off"
             onChange={e=>onProjectNameChange(e.target.value)}
-            onFocus={e=>{ if(e.target.value) queryProjectSuggestions(e.target.value); }}
-            onBlur={e=>{ setTimeout(()=>{ setShowSuggestions(false); maybeShowPanelForName(e.target.value); }, 180); }}
+            onFocus={e=>{ if(e.target.value.trim()) queryProjectSuggestions(e.target.value); }}
+            onClick={e=>{ if(e.target.value.trim()) queryProjectSuggestions(e.target.value); }}
+            onBlur={e=>{ setTimeout(()=>{ maybeShowPanelForName(e.target.value); }, 220); }}
           />
           {showSuggestions && suggestions.length>0 && (
             <div className="suggestions-dropdown">
