@@ -13,15 +13,8 @@ export default function Dashboard(){
     api.get('/dashboard/due-soon').then(r=>setDueSoon(r.data.slice(0,5))).catch(()=>{});
   },[])
 
-  const openNewPost = () => {
-    window.dispatchEvent(new CustomEvent('openPostModal'));
-    window.localStorage.setItem('open_post_after_route', '1');
-  };
-
-  const openBulk = () => {
-    window.dispatchEvent(new CustomEvent('openBulkModal'));
-    window.localStorage.setItem('open_bulk_after_route', '1');
-  };
+  const openNewPost = () => window.dispatchEvent(new CustomEvent('requestNewPost'));
+  const openBulk = () => window.dispatchEvent(new CustomEvent('requestBulkCreate'));
 
   const stats = [
     {key:'total', label:'Total posts', value: summary.total||0, icon:'📁', trend:'+4%'},
@@ -38,8 +31,8 @@ export default function Dashboard(){
           <div style={{color:'var(--muted)',fontSize:13}}>Manage projects and scheduled content from one place.</div>
         </div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}}>
-          <button className="btn-secondary" onClick={openBulk}>Bulk Create</button>
-          <button className="btn-primary" onClick={openNewPost}>+ New Scheduled Post</button>
+          <button className="btn-secondary" type="button" onClick={openBulk}>Bulk Create</button>
+          <button className="btn-primary" type="button" onClick={openNewPost}>+ New Scheduled Post</button>
         </div>
       </div>
 
@@ -57,21 +50,13 @@ export default function Dashboard(){
       </div>
 
       <div className="charts">
-        <div className="chart card">
-          <div className="card-header"><h3>Posts by Channel</h3></div>
-          <div className="card-body">(chart placeholder)</div>
-        </div>
-        <div className="chart card">
-          <div className="card-header"><h3>Posts by Content Type</h3></div>
-          <div className="card-body">(chart placeholder)</div>
-        </div>
+        <div className="chart card"><div className="card-header"><h3>Posts by Channel</h3></div><div className="card-body">(chart placeholder)</div></div>
+        <div className="chart card"><div className="card-header"><h3>Posts by Content Type</h3></div><div className="card-body">(chart placeholder)</div></div>
       </div>
 
       <div className="recent card">
         <h3>Recent activity</h3>
-        <ul>
-          {posts.map(p=> <li key={p.id}>{p.project_name||'(untitled)'} — {p.status} — {p.scheduled_at||'no date'}</li>)}
-        </ul>
+        <ul>{posts.map(p=> <li key={p.id}>{p.project_name||'(untitled)'} — {p.status} — {p.scheduled_at||'no date'}</li>)}</ul>
       </div>
 
       <div className="card due-soon">
@@ -84,11 +69,11 @@ export default function Dashboard(){
                 <div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div>
                 <LinkActions url={p.uploaded_link} />
               </div>
-              <div><button onClick={()=>{ api.post('/posts/'+p.id+'/mark-uploaded',{ uploaded_link: p.uploaded_link||null }).then(()=> setDueSoon(ds=>ds.filter(x=>x.id!==p.id))); }}>Mark Uploaded</button></div>
+              <div><button type="button" onClick={()=>api.post('/posts/'+p.id+'/mark-uploaded',{ uploaded_link:p.uploaded_link||null }).then(()=>setDueSoon(ds=>ds.filter(x=>x.id!==p.id)))}>Mark Uploaded</button></div>
             </li>
           ))}
         </ul>
-        <div><button onClick={()=>{ localStorage.setItem('list_filter_dueSoon','1'); window.dispatchEvent(new CustomEvent('navigateToList')); }}>View all</button></div>
+        <div><button type="button" onClick={()=>window.dispatchEvent(new CustomEvent('navigateToList'))}>View all</button></div>
       </div>
     </div>
   )
