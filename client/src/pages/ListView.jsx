@@ -6,10 +6,11 @@ import LinkActions from '../components/LinkActions'
 export default function ListView(){
   const [posts, setPosts] = useState([]);
   const [filters, setFilters] = useState({search:'', channel:'', content_type:'', status:''});
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(()=>{
     load();
-    const onOpen = ()=>document.getElementById('createModal')?.classList.remove('hidden');
+    const onOpen = ()=>setShowCreateModal(true);
     const onNav = ()=>{
       if(localStorage.getItem('list_filter_dueSoon')){
         setFilters(f=>({...f, dueSoon:true}));
@@ -17,9 +18,11 @@ export default function ListView(){
       }
     };
     window.addEventListener('openPostModal', onOpen);
+    window.addEventListener('openPostModalOnly', onOpen);
     window.addEventListener('navigateToList', onNav);
     return ()=>{
       window.removeEventListener('openPostModal', onOpen);
+      window.removeEventListener('openPostModalOnly', onOpen);
       window.removeEventListener('navigateToList', onNav);
     };
   },[])
@@ -28,6 +31,8 @@ export default function ListView(){
   const [myPostsOnly, setMyPostsOnly] = useState(localStorage.getItem('my_posts')==='1');
   const load = ()=> api.get('/posts').then(r=> setPosts(r.data)).catch(()=>{});
   const deletePost = (id)=>{ api.delete('/posts/'+id).then(()=>load()); }
+
+  const closeCreateModal = ()=>setShowCreateModal(false);
 
   return (
     <div className="page listview">
@@ -40,7 +45,7 @@ export default function ListView(){
           <button className="list-tool-btn" type="button">Sort</button>
           <button className="list-tool-btn" type="button">Filters</button>
           <button className="btn-secondary" type="button" onClick={()=>window.dispatchEvent(new CustomEvent('requestBulkCreate'))}>Bulk</button>
-          <button className="btn-primary" type="button" onClick={()=>document.getElementById('createModal')?.classList.remove('hidden')}>
+          <button className="btn-primary" type="button" onClick={()=>setShowCreateModal(true)}>
             <span className="new-post-plus">+</span> New Scheduled Post <span className="fab-shortcut">N</span>
           </button>
         </div>
@@ -76,9 +81,13 @@ export default function ListView(){
         </table>
       </div>
 
-      <div id="createModal" className="modal hidden">
-        <PostForm onSaved={()=>{ document.getElementById('createModal').classList.add('hidden'); load(); }} />
-      </div>
+      {showCreateModal && (
+        <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget) closeCreateModal()}}>
+          <div className="modal create-post-modal" role="dialog" aria-modal="true" aria-labelledby="create-post-title">
+            <PostForm onSaved={()=>{ closeCreateModal(); load(); }} onCancel={closeCreateModal} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
