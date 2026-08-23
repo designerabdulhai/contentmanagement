@@ -9,12 +9,17 @@ export default function ListView(){
 
   useEffect(()=>{ load();
     const onOpen = ()=>document.getElementById('createModal')?.classList.remove('hidden');
+    const onOpenOnly = ()=>document.getElementById('createModal')?.classList.remove('hidden');
     window.addEventListener('openPostModal', onOpen);
+    window.addEventListener('openPostModalOnly', onOpenOnly);
     const onNav = ()=>{
       if(localStorage.getItem('list_filter_dueSoon')){ setFilters(f=>({...f, dueSoon:true})); localStorage.removeItem('list_filter_dueSoon'); }
     }
-    window.addEventListener('navigateToList', onNav);
-    return ()=>{ window.removeEventListener('openPostModal', onOpen); window.removeEventListener('navigateToList', onNav); };
+    return ()=>{
+      window.removeEventListener('openPostModal', onOpen);
+      window.removeEventListener('openPostModalOnly', onOpenOnly);
+      window.removeEventListener('navigateToList', onNav);
+    };
   },[])
 
   const currentUserId = 1;
@@ -27,7 +32,7 @@ export default function ListView(){
       <div className="list-header">
         <div style={{display:'flex',gap:8,alignItems:'center'}}>
           <input className="search" placeholder="Search posts" value={filters.search} onChange={e=>setFilters({...filters,search:e.target.value})} />
-          <button className={myPostsOnly? 'active':''} onClick={()=>{ setMyPostsOnly(s=>{ const v=!s; localStorage.setItem('my_posts', v?'1':'0'); return v; }); }}>My Posts</button>
+          <button className={myPostsOnly? 'active':''} type="button" onClick={()=>{ setMyPostsOnly(s=>{ const v=!s; localStorage.setItem('my_posts', v?'1':'0'); return v; }); }}>My Posts</button>
         </div>
         <div className="list-actions">
           <button className="list-tool-btn" type="button">Sort</button>
@@ -59,9 +64,9 @@ export default function ListView(){
                 </td>
                 <td>{p.owner}</td>
                 <td className="actions">
-                  <button title="Edit" onClick={()=>window.dispatchEvent(new CustomEvent('editPost',{detail:p}))}>✏️</button>
-                  <button title="Duplicate" onClick={()=>api.post('/posts/'+p.id+'/duplicate').then(()=>load())}>⎘</button>
-                  <button title="Delete" onClick={()=>deletePost(p.id)}>🗑️</button>
+                  <button type="button" title="Edit" onClick={()=>window.dispatchEvent(new CustomEvent('editPost',{detail:p}))}>✏️</button>
+                  <button type="button" title="Duplicate" onClick={()=>api.post('/posts/'+p.id+'/duplicate').then(()=>load())}>⎘</button>
+                  <button type="button" title="Delete" onClick={()=>deletePost(p.id)}>🗑️</button>
                 </td>
               </tr>
             ))}
