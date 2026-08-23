@@ -97,14 +97,28 @@ export default function PostForm({onSaved,onCancel}){
     }
   }
 
+  const applySuggestion = (data)=>{
+    const list = Array.isArray(data) ? data : [];
+    setSuggestions(list);
+    setShowSuggestions(list.length > 0);
+    if(list.length > 0){
+      setSelectedProjectPanel(list[0]);
+      setPanelOpen(true);
+    }
+  }
+
   const queryProjectSuggestions = (q)=>{
     const raw = String(q || '').trim();
     const key = raw.toLowerCase();
-    if(!key) { setSuggestions([]); setShowSuggestions(false); return; }
+    if(!key) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSelectedProjectPanel(null);
+      return;
+    }
     const cached = suggestionsCache.current[key];
     if(Array.isArray(cached)){
-      setSuggestions(cached);
-      setShowSuggestions(cached.length > 0);
+      applySuggestion(cached);
       return;
     }
     const requestId = ++requestSeqRef.current;
@@ -112,12 +126,12 @@ export default function PostForm({onSaved,onCancel}){
       if(requestId !== requestSeqRef.current) return;
       const data = Array.isArray(res.data) ? res.data : [];
       suggestionsCache.current[key] = data;
-      setSuggestions(data);
-      setShowSuggestions(data.length > 0);
+      applySuggestion(data);
     }).catch(()=>{
       if(requestId !== requestSeqRef.current) return;
       setSuggestions([]);
       setShowSuggestions(false);
+      setSelectedProjectPanel(null);
     });
   }
 
@@ -125,7 +139,7 @@ export default function PostForm({onSaved,onCancel}){
     setPost({...post, project_name: val});
     setSelectedProjectPanel(null);
     if(debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(()=> queryProjectSuggestions(val), 180);
+    debounceRef.current = setTimeout(()=> queryProjectSuggestions(val), 120);
   }
 
   const selectSuggestion = (s)=>{
@@ -140,6 +154,7 @@ export default function PostForm({onSaved,onCancel}){
     if(!key) return;
     const found = suggestionsCache.current[key] || suggestions.find(x=>x.project_name?.toLowerCase()===key);
     if(found){ setSelectedProjectPanel(found); setPanelOpen(true); }
+    else queryProjectSuggestions(name);
   }
 
   const contentTypes = Array.isArray(settings.content_types) ? settings.content_types : [];
@@ -160,7 +175,7 @@ export default function PostForm({onSaved,onCancel}){
             onChange={e=>onProjectNameChange(e.target.value)}
             onFocus={e=>{ if(e.target.value.trim()) queryProjectSuggestions(e.target.value); }}
             onClick={e=>{ if(e.target.value.trim()) queryProjectSuggestions(e.target.value); }}
-            onBlur={e=>{ setTimeout(()=>{ maybeShowPanelForName(e.target.value); }, 220); }}
+            onBlur={e=>{ setTimeout(()=>maybeShowPanelForName(e.target.value), 220); }}
           />
           {showSuggestions && suggestions.length>0 && (
             <div className="suggestions-dropdown">
