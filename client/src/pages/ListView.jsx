@@ -1,12 +1,28 @@
-import React, {useEffect, useState} from 'react'
+import React, {useEffect, useMemo, useState} from 'react'
 import api from '../api'
 import PostForm from '../components/PostForm'
 import LinkActions from '../components/LinkActions'
+
+const STATUS_OPTIONS = ['Listed','Scheduled','Uploaded'];
+
+function formatDayLabel(value){
+  if(!value) return 'No date';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? 'No date' : d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+}
+
+function formatTime(value){
+  if(!value) return '';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+}
 
 export default function ListView(){
   const [posts, setPosts] = useState([]);
   const [filters, setFilters] = useState({search:'', channel:'', content_type:'', status:''});
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(null);
+  const [groupByDate, setGroupByDate] = useState(true);
 
   useEffect(()=>{
     load();
@@ -29,17 +45,48 @@ export default function ListView(){
 
   const currentUserId = 1;
   const [myPostsOnly, setMyPostsOnly] = useState(localStorage.getItem('my_posts')==='1');
-  const load = ()=> api.get('/posts').then(r=> setPosts(r.data)).catch(()=>{});
-  const deletePost = (id)=>{ api.delete('/posts/'+id).then(()=>load()); }
+  const load = ()=> api.get('/posts').then(r=> setPosts(Array.isArray(r.data)?r.data:[])).catch(()=>setPosts([]));
+  const deletePost = (id)=>{ api.delete('/posts/'+id).then(()=>load()).catch(()=>{}); }
 
-  const closeCreateModal = ()=>setShowCreateModal(false);
+  const filteredPosts = useMemo(()=>posts.filter(p=>
+    (!filters.search || (p.project_name||'').toLowerCase().includes(filters.search.toLowerCase())) &&
+    (!filters.channel || p.channel===filters.channel) &&
+    (!filters.content_type || p.content_type===filters.content_type) &&
+    (!filters.status || p.status===filters.status) &&
+    (!myPostsOnly || p.created_by==currentUserId)
+  ),[posts,filters,myPostsOnly]);
+
+  const groups = useMemo(()=>{
+    const map = {};
+    filteredPosts.forEach(post=>{
+      const key = post.scheduled_at ? formatDayLabel(post.scheduled_at) : 'No date';
+      (map[key] ||= []).push(post);
+    });
+    return Object.entries(map).sort((a,b)=>{
+      if(a[0]==='No date') return 1;
+      if(b[0]==='No date') return -1;
+      return new Date(a[1][0]?.scheduled_at||0)-new Date(b[1][0]?.scheduled_at||0);
+    });
+  },[filteredPosts]);
+
+  const changeStatus = async (post, status)=>{
+    if(!post?.id || !status || status===post.status) return;
+    setUpdatingStatus(post.id);
+    try{
+      const r = await api.put('/posts/'+post.id, {...post, status});
+      const updated = r?.data || {...post,status};
+      setPosts(current=>current.map(item=>item.id===post.id?updated:item));
+    }catch(e){}
+    finally{ setUpdatingStatus(null); }
+  };
 
   return (
     <div className="page listview">
       <div className="list-header">
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
           <input className="search" placeholder="Search posts" value={filters.search} onChange={e=>setFilters({...filters,search:e.target.value})} />
-          <button className={myPostsOnly? 'active':''} type="button" onClick={()=>{ setMyPostsOnly(s=>{ const v=!s; localStorage.setItem('my_posts', v?'1':'0'); return v; }); }}>My Posts</button>
+          <button className={myPostsOnly?'active':''} type="button" onClick={()=>{ setMyPostsOnly(s=>{ const v=!s; localStorage.setItem('my_posts',v?'1':'0'); return v; }); }}>My Posts</button>
+          <button className={groupByDate?'active':''} type="button" onClick={()=>setGroupByDate(v=>!v)}>{groupByDate?'Date grouped':'Table view'}</button>
         </div>
         <div className="list-actions">
           <button className="list-tool-btn" type="button">Sort</button>
@@ -51,40 +98,72 @@ export default function ListView(){
         </div>
       </div>
 
-      <div className="table-wrap card">
-        <table className="posts">
-          <thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Date</th><th>Uploaded Link</th><th>Owner</th><th>Actions</th></tr></thead>
-          <tbody>
-            {posts.filter(p=> (!filters.search || (p.project_name||'').toLowerCase().includes(filters.search.toLowerCase())) && (!myPostsOnly || p.created_by==currentUserId)).map(p=> (
-              <tr key={p.id}>
-                <td>{p.project_name}</td>
-                <td>{p.content_type}</td>
-                <td>{p.channel}</td>
-                <td>{p.platform}</td>
-                <td><span className={"status-pill "+(p.status?.toLowerCase()||'')}>{p.status}</span></td>
-                <td>{p.scheduled_at}</td>
-                <td>
-                  <div style={{display:'flex',alignItems:'center',gap:8}}>
-                      <div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div>
-                      <LinkActions url={p.uploaded_link} />
-                  </div>
-                </td>
-                <td>{p.owner}</td>
-                <td className="actions">
-                  <button type="button" title="Edit" onClick={()=>window.dispatchEvent(new CustomEvent('editPost',{detail:p}))}>✏️</button>
-                  <button type="button" title="Duplicate" onClick={()=>api.post('/posts/'+p.id+'/duplicate').then(()=>load())}>⎘</button>
-                  <button type="button" title="Delete" onClick={()=>deletePost(p.id)}>🗑️</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {groupByDate ? (
+        <div className="date-groups">
+          {groups.map(([day, items])=>(
+            <section className="date-group" key={day}>
+              <div className="date-group-header">
+                <div>
+                  <h3>{day}</h3>
+                  <span>{items.length} {items.length===1?'post':'posts'}</span>
+                </div>
+              </div>
+              <div className="table-wrap card date-group-table">
+                <table className="posts">
+                  <thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Time</th><th>Uploaded Link</th><th>Owner</th><th>Actions</th></tr></thead>
+                  <tbody>
+                    {items.map(p=>(
+                      <tr key={p.id}>
+                        <td>{p.project_name}</td>
+                        <td>{p.content_type}</td>
+                        <td>{p.channel}</td>
+                        <td>{p.platform}</td>
+                        <td>
+                          <select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>
+                            {STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}
+                          </select>
+                        </td>
+                        <td>{formatTime(p.scheduled_at)}</td>
+                        <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link} /></div></td>
+                        <td>{p.owner}</td>
+                        <td className="actions">
+                          <button type="button" title="Edit" onClick={()=>window.dispatchEvent(new CustomEvent('editPost',{detail:p}))}>✏️</button>
+                          <button type="button" title="Duplicate" onClick={()=>api.post('/posts/'+p.id+'/duplicate').then(()=>load()).catch(()=>{})}>⎘</button>
+                          <button type="button" title="Delete" onClick={()=>deletePost(p.id)}>🗑️</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
+          {groups.length===0 && <div className="card empty-state">No posts found.</div>}
+        </div>
+      ) : (
+        <div className="table-wrap card">
+          <table className="posts">
+            <thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Date</th><th>Uploaded Link</th><th>Owner</th><th>Actions</th></tr></thead>
+            <tbody>
+              {filteredPosts.map(p=>(
+                <tr key={p.id}>
+                  <td>{p.project_name}</td><td>{p.content_type}</td><td>{p.channel}</td><td>{p.platform}</td>
+                  <td><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select></td>
+                  <td>{p.scheduled_at}</td>
+                  <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link} /></div></td>
+                  <td>{p.owner}</td>
+                  <td className="actions"><button type="button" title="Edit" onClick={()=>window.dispatchEvent(new CustomEvent('editPost',{detail:p}))}>✏️</button><button type="button" title="Duplicate" onClick={()=>api.post('/posts/'+p.id+'/duplicate').then(()=>load()).catch(()=>{})}>⎘</button><button type="button" title="Delete" onClick={()=>deletePost(p.id)}>🗑️</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {showCreateModal && (
-        <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget) closeCreateModal()}}>
-          <div className="modal create-post-modal" role="dialog" aria-modal="true" aria-labelledby="create-post-title">
-            <PostForm onSaved={()=>{ closeCreateModal(); load(); }} onCancel={closeCreateModal} />
+        <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowCreateModal(false)}}>
+          <div className="modal create-post-modal" role="dialog" aria-modal="true">
+            <PostForm onSaved={()=>{setShowCreateModal(false);load()}} onCancel={()=>setShowCreateModal(false)} />
           </div>
         </div>
       )}
