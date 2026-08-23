@@ -225,10 +225,10 @@ export default function PostForm({onSaved,onCancel}){
           </div>
           {panelOpen && (
             <div className="panel-body">
-              {Array.isArray(selectedProjectPanel.last_scheduled_dates) && selectedProjectPanel.last_scheduled_dates.map((row, idx)=> {
+              {Array.isArray(selectedProjectPanel.last_scheduled_dates) && selectedProjectPanel.last_scheduled_dates.length > 0 ? selectedProjectPanel.last_scheduled_dates.map((row, idx)=> {
                 const value = typeof row === 'string' ? row : row?.scheduled_at;
                 return <div className="panel-row" key={idx}>{formatSuggestedDate(value)} {typeof row === 'object' && row?.channel ? `· ${row.channel}` : ''} {typeof row === 'object' && row?.status ? `· ${row.status}` : ''}</div>;
-              })}
+              }) : <div className="panel-row">No previous schedules found for this project.</div>}
             </div>
           )}
         </div>
