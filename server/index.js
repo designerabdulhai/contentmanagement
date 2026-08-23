@@ -44,7 +44,7 @@ app.get('/api/posts/project-suggestions', (req, res) => {
   const rows = db.prepare(`
     SELECT project_name, scheduled_at, channel, status FROM posts
     WHERE project_name IS NOT NULL AND lower(project_name) LIKE ?
-    ORDER BY scheduled_at DESC
+    ORDER BY scheduled_at IS NULL, scheduled_at DESC
   `).all(`%${q.toLowerCase()}%`);
   const map = {};
   for (const r of rows) {
@@ -53,15 +53,19 @@ app.get('/api/posts/project-suggestions', (req, res) => {
     map[name].count += 1;
     if (r.scheduled_at) map[name].last_scheduled.push(r);
   }
-  res.json(Object.values(map).map(item => ({
-    project_name: item.project_name,
-    last_scheduled_dates: item.last_scheduled.slice(0, 5).map(s => {
-      const d = new Date(s.scheduled_at);
-      const label = Number.isNaN(d.getTime()) ? s.scheduled_at : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      return `${label} · ${s.channel || ''} · ${s.status || ''}`;
-    }),
-    count: item.count
-  })));
+  res.json(Object.values(map).map(item => {
+    const latest = item.last_scheduled[0] || null;
+    return {
+      project_name: item.project_name,
+      count: item.count,
+      last_scheduled_at: latest?.scheduled_at || null,
+      last_scheduled_dates: item.last_scheduled.slice(0, 5).map(s => ({
+        scheduled_at: s.scheduled_at,
+        channel: s.channel || '',
+        status: s.status || ''
+      }))
+    };
+  }));
 });
 
 app.post('/api/posts/bulk', (req, res) => {
@@ -212,8 +216,6 @@ app.get('/api/summary', (req, res) => {
   res.json({ total, scheduledWeek, uploadedMonth, listedCount, overdue });
 });
 
-// Serve the production React build from the same Node app. This makes cPanel deployment simple:
-// build client/ first, then point the cPanel Node application at server/index.js.
 const clientDist = path.resolve(__dirname, '../client/dist');
 app.use(express.static(clientDist, { index: 'index.html' }));
 app.get('*', (req, res, next) => {
