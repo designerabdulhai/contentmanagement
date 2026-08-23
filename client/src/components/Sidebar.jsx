@@ -9,7 +9,7 @@ const NavItem = ({icon, label, active, onClick})=> (
 
 export default function Sidebar({route,setRoute,theme,setTheme}){
   return (
-    <aside className="sidebar">
+    <aside className="sidebar sidebar-fixed">
       <div className="brand">
         <div className="logo">CS</div>
         <div className="appname">Content Schedule</div>
