@@ -2,7 +2,7 @@ import React, {useEffect, useState, useRef} from 'react'
 import api from '../api'
 import LinkActions from './LinkActions'
 
-export default function PostForm({onSaved}){
+export default function PostForm({onSaved,onCancel}){
   const empty = {project_name:'', content_type:'', channel:'', platform:'', status:'Listed', scheduled_at:'', uploaded_link:'', notes:''};
   const [post, setPost] = useState(empty);
   const [settings, setSettings] = useState({});
@@ -45,8 +45,8 @@ export default function PostForm({onSaved}){
   },[])
 
   const save = ()=>{
-    if(post.id) api.put('/posts/'+post.id, post).then(r=>{ onSaved && onSaved(r.data); });
-    else api.post('/posts', post).then(r=>{ onSaved && onSaved(r.data); });
+    const request = post.id ? api.put('/posts/'+post.id, post) : api.post('/posts', post);
+    request.then(r=>{ onSaved && onSaved(r.data); }).catch(()=>{});
   }
 
   const useTemplate = (tId)=>{
@@ -61,7 +61,7 @@ export default function PostForm({onSaved}){
     api.post('/templates', { name, content_type: post.content_type, channel: post.channel, platform: post.platform }).then(r=>{
       setTemplates([r.data, ...templates]);
       alert('Template saved');
-    })
+    }).catch(()=>{});
   }
 
   const onPasteLink = (e)=>{
@@ -122,7 +122,7 @@ export default function PostForm({onSaved}){
 
   return (
     <div className="postform drawer">
-      <h3>{post.id? 'Edit Post':'Create New Post'}</h3>
+      <h3 id="create-post-title">{post.id? 'Edit Post':'Create New Post'}</h3>
       {loadingSettings && <div className="setting-help">Loading form options…</div>}
       {settingsError && <div className="setting-help">{settingsError}</div>}
       <div className="form-grid">
@@ -195,7 +195,7 @@ export default function PostForm({onSaved}){
       )}
       <div className="form-actions">
         <button className="btn-primary" type="button" onClick={save}>Save</button>
-        <button type="button" onClick={()=>{ setPost(empty); document.getElementById('createModal')?.classList.add('hidden'); }}>Cancel</button>
+        <button type="button" onClick={()=>{ setPost(empty); onCancel ? onCancel() : document.getElementById('createModal')?.classList.add('hidden'); }}>Cancel</button>
       </div>
     </div>
   )
