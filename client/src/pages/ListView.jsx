@@ -7,17 +7,19 @@ export default function ListView(){
   const [posts, setPosts] = useState([]);
   const [filters, setFilters] = useState({search:'', channel:'', content_type:'', status:''});
 
-  useEffect(()=>{ load();
+  useEffect(()=>{
+    load();
     const onOpen = ()=>document.getElementById('createModal')?.classList.remove('hidden');
-    const onOpenOnly = ()=>document.getElementById('createModal')?.classList.remove('hidden');
-    window.addEventListener('openPostModal', onOpen);
-    window.addEventListener('openPostModalOnly', onOpenOnly);
     const onNav = ()=>{
-      if(localStorage.getItem('list_filter_dueSoon')){ setFilters(f=>({...f, dueSoon:true})); localStorage.removeItem('list_filter_dueSoon'); }
-    }
+      if(localStorage.getItem('list_filter_dueSoon')){
+        setFilters(f=>({...f, dueSoon:true}));
+        localStorage.removeItem('list_filter_dueSoon');
+      }
+    };
+    window.addEventListener('openPostModal', onOpen);
+    window.addEventListener('navigateToList', onNav);
     return ()=>{
       window.removeEventListener('openPostModal', onOpen);
-      window.removeEventListener('openPostModalOnly', onOpenOnly);
       window.removeEventListener('navigateToList', onNav);
     };
   },[])
@@ -37,7 +39,7 @@ export default function ListView(){
         <div className="list-actions">
           <button className="list-tool-btn" type="button">Sort</button>
           <button className="list-tool-btn" type="button">Filters</button>
-          <button className="btn-secondary" type="button" onClick={()=>window.dispatchEvent(new CustomEvent('openBulkModal'))}>Bulk</button>
+          <button className="btn-secondary" type="button" onClick={()=>window.dispatchEvent(new CustomEvent('requestBulkCreate'))}>Bulk</button>
           <button className="btn-primary" type="button" onClick={()=>document.getElementById('createModal')?.classList.remove('hidden')}>
             <span className="new-post-plus">+</span> New Scheduled Post <span className="fab-shortcut">N</span>
           </button>
@@ -77,7 +79,6 @@ export default function ListView(){
       <div id="createModal" className="modal hidden">
         <PostForm onSaved={()=>{ document.getElementById('createModal').classList.add('hidden'); load(); }} />
       </div>
-
     </div>
   )
 }
