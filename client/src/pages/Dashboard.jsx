@@ -20,17 +20,18 @@ function weeklyCounts(posts){
     const d = new Date(p.scheduled_at);
     if(Number.isNaN(d.getTime())) return;
     const day = d.toLocaleDateString('en-US',{weekday:'short'});
-    if(day === 'Sun') result.Sun += 1;
-    else result[day] = (result[day] || 0) + 1;
+    result[day] = (result[day] || 0) + 1;
   });
   return result;
 }
 
+const tooltipBgStyle = {fill:'#ffffff',stroke:'#d9dee8',strokeWidth:1,filter:'drop-shadow(0 3px 8px rgba(15,23,42,.14))'};
+const tooltipTitleStyle = {fill:'#111827',fontSize:11,fontWeight:700};
+const tooltipValueStyle = {fill:'#667085',fontSize:11,fontWeight:600};
+
 function AreaChart({title, data}){
   const [hovered, setHovered] = useState(null);
-  const entries = title === 'Posts by Day'
-    ? WEEKDAYS.map(day=>[day, data[day] || 0])
-    : Object.entries(data);
+  const entries = title === 'Posts by Day' ? WEEKDAYS.map(day=>[day, data[day] || 0]) : Object.entries(data);
   const values = entries.map(([,v])=>v);
   const max = Math.max(...values, 1);
   const width = 640, height = 280, left = 44, right = 22, top = 26, bottom = 38;
@@ -63,10 +64,10 @@ function AreaChart({title, data}){
           const tooltipY = Math.max(p.y - 48, 4);
           return <g key={i} onMouseEnter={()=>setHovered(i)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setHovered(i)} onBlur={()=>setHovered(null)}>
             <circle cx={p.x} cy={p.y} r={isHovered ? 7 : 5} className="reference-point" tabIndex="0" role="button" aria-label={`${label}: ${p.value}`}/>
-            {isHovered && <g className="chart-hover-tooltip" pointerEvents="none">
-              <rect x={tooltipX} y={tooltipY} width={tooltipW} height="38" rx="7" className="chart-tooltip-bg"/>
-              <text x={tooltipX+10} y={tooltipY+15} className="chart-tooltip-title">{label}</text>
-              <text x={tooltipX+10} y={tooltipY+30} className="chart-tooltip-value">{p.value} post{p.value === 1 ? '' : 's'}</text>
+            {isHovered && <g pointerEvents="none">
+              <rect x={tooltipX} y={tooltipY} width={tooltipW} height="38" rx="7" style={tooltipBgStyle}/>
+              <text x={tooltipX+10} y={tooltipY+15} style={tooltipTitleStyle}>{label}</text>
+              <text x={tooltipX+10} y={tooltipY+30} style={tooltipValueStyle}>{p.value} post{p.value === 1 ? '' : 's'}</text>
             </g>}
           </g>
         })}
@@ -85,10 +86,10 @@ function BarChart({title, data}){
     <div className="reference-bars">
       {entries.length ? entries.map(([label,value],i)=>{
         const isHovered = hovered === label;
-        return <div className="reference-bar-row" key={label} onMouseEnter={()=>setHovered(label)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setHovered(label)} onBlur={()=>setHovered(null)} tabIndex="0" role="button" aria-label={`${label}: ${value}`}>
+        return <div className="reference-bar-row" key={label} onMouseEnter={()=>setHovered(label)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setHovered(label)} onBlur={()=>setHovered(null)} tabIndex="0" role="button" aria-label={`${label}: ${value}`} style={{position:'relative'}}>
           <div className="reference-bar-label" title={label}>{label}</div>
           <div className="reference-bar-track"><div className="reference-bar-fill" style={{width:`${Math.max(8,(value/max)*100)}%`,background:PALETTE[i%PALETTE.length]}}><span>{value}</span></div></div>
-          {isHovered && <div className="chart-html-tooltip"><strong>{label}</strong><span>{value} post{value === 1 ? '' : 's'}</span></div>}
+          {isHovered && <div style={{position:'absolute',right:0,top:'-42px',zIndex:10,background:'#fff',border:'1px solid #d9dee8',borderRadius:7,padding:'7px 10px',boxShadow:'0 4px 12px rgba(15,23,42,.14)',display:'flex',gap:8,alignItems:'center',fontSize:11,whiteSpace:'nowrap',pointerEvents:'none'}}><strong style={{color:'#111827'}}>{label}</strong><span style={{color:'#667085'}}>{value} post{value === 1 ? '' : 's'}</span></div>}
         </div>
       }) : <div className="chart-empty">No data yet</div>}
     </div>
