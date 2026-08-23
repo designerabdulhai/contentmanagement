@@ -227,7 +227,13 @@ export default function PostForm({onSaved,onCancel}){
             <div className="panel-body">
               {Array.isArray(selectedProjectPanel.last_scheduled_dates) && selectedProjectPanel.last_scheduled_dates.length > 0 ? selectedProjectPanel.last_scheduled_dates.map((row, idx)=> {
                 const value = typeof row === 'string' ? row : row?.scheduled_at;
-                return <div className="panel-row" key={idx}>{formatSuggestedDate(value)} {typeof row === 'object' && row?.channel ? `· ${row.channel}` : ''} {typeof row === 'object' && row?.status ? `· ${row.status}` : ''}</div>;
+                return <div className="panel-row" key={idx}>
+                  <div className="panel-row-date">{typeof row === 'object' && row?.label ? row.label : formatSuggestedDate(value)}</div>
+                  <div className="panel-row-meta">
+                    {typeof row === 'object' && row?.channel ? <span>{row.channel}</span> : null}
+                    {typeof row === 'object' && row?.status ? <span className={`panel-status ${String(row.status).toLowerCase()}`}>{row.status}</span> : null}
+                  </div>
+                </div>;
               }) : <div className="panel-row">No previous schedules found for this project.</div>}
             </div>
           )}
