@@ -8,6 +8,8 @@ import Topbar from './components/Topbar'
 import api from './api'
 
 const defaultProfile = { name: 'Owner Name', email: '', photo: '' };
+const ROUTES = new Set(['dashboard','list','calendar','settings']);
+const ACTIVE_ROUTE_KEY = 'content_schedule_active_route';
 
 function profileFromSettings(data){
   return {
@@ -17,12 +19,27 @@ function profileFromSettings(data){
   };
 }
 
+function getInitialRoute(){
+  try {
+    const saved = localStorage.getItem(ACTIVE_ROUTE_KEY);
+    return ROUTES.has(saved) ? saved : 'dashboard';
+  } catch(e) {
+    return 'dashboard';
+  }
+}
+
 export default function App(){
-  const [route, setRoute] = useState('dashboard');
+  const [route, setRoute] = useState(getInitialRoute);
   const [managers, setManagers] = useState([]);
   const [theme, setTheme] = useState('light');
   const [profile, setProfile] = useState(defaultProfile);
   const [modalRequest, setModalRequest] = useState(null);
+
+  const navigate = (nextRoute) => {
+    const safeRoute = ROUTES.has(nextRoute) ? nextRoute : 'dashboard';
+    setRoute(safeRoute);
+    try { localStorage.setItem(ACTIVE_ROUTE_KEY, safeRoute); } catch(e) {}
+  };
 
   const loadProfile = () => api.get('/settings').then(r => setProfile(profileFromSettings(r.data))).catch(()=>{});
 
@@ -37,14 +54,13 @@ export default function App(){
     return ()=>window.removeEventListener('profileUpdated', onProfileUpdated);
   },[])
 
-  // Cross-page actions: navigate first, then let ListView open its own mounted modal.
   useEffect(()=>{
     const requestPost = () => {
-      setRoute('list');
+      navigate('list');
       setModalRequest('post');
     };
     const requestBulk = () => {
-      setRoute('list');
+      navigate('list');
       setModalRequest('bulk');
     };
     window.addEventListener('requestNewPost', requestPost);
@@ -66,7 +82,7 @@ export default function App(){
   },[route, modalRequest])
 
   useEffect(()=>{
-    const onNavigateToList = ()=>setRoute('list');
+    const onNavigateToList = ()=>navigate('list');
     window.addEventListener('navigateToList', onNavigateToList);
     return ()=>window.removeEventListener('navigateToList', onNavigateToList);
   },[])
@@ -88,7 +104,7 @@ export default function App(){
 
   return (
     <div className="app-root layout-root">
-      <Sidebar route={route} setRoute={setRoute} theme={theme} setTheme={setTheme} />
+      <Sidebar route={route} setRoute={navigate} theme={theme} setTheme={setTheme} />
       <div className="main-area">
         <Topbar title={route==='dashboard'? 'Dashboard' : route==='list'? 'All Posts' : route==='settings'? 'Settings' : 'Calendar'} managers={managers} profile={profile} />
         <main className="main-content">
