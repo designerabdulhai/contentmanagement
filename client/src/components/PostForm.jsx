@@ -1,5 +1,5 @@
 import React, {useEffect, useState, useRef} from 'react'
-import api from '../api'
+import api from './api'
 import LinkActions from './LinkActions'
 
 function toDateTimeLocal(value){
@@ -150,7 +150,10 @@ export default function PostForm({onSaved,onCancel}){
               {suggestions.map(s=> (
                 <button type="button" key={s.project_name} className="suggestion-item" onMouseDown={e=>e.preventDefault()} onClick={()=>selectSuggestion(s)}>
                   <span className="suggestion-name">{s.project_name}</span>
-                  <span className="suggestion-meta"><span>{s.count} past {s.count===1?'schedule':'schedules'}</span>{s.last_scheduled_at && <span className="suggestion-date">Last: {formatSuggestedDate(s.last_scheduled_at)}</span>}</span>
+                  <span className="suggestion-meta">
+                    <span>{s.count} past {s.count===1?'schedule':'schedules'}</span>
+                    {s.last_scheduled_at && <span className="suggestion-date">Last: {formatSuggestedDate(s.last_scheduled_at)}</span>}
+                  </span>
                 </button>
               ))}
             </div>
@@ -205,9 +208,10 @@ export default function PostForm({onSaved,onCancel}){
           </div>
           {panelOpen && (
             <div className="panel-body">
-              {Array.isArray(selectedProjectPanel.last_scheduled_dates) && selectedProjectPanel.last_scheduled_dates.map((row, idx)=> (
-                <div className="panel-row" key={idx}>{formatSuggestedDate(row)}</div>
-              ))}
+              {Array.isArray(selectedProjectPanel.last_scheduled_dates) && selectedProjectPanel.last_scheduled_dates.map((row, idx)=> {
+                const value = typeof row === 'string' ? row : row?.scheduled_at;
+                return <div className="panel-row" key={idx}>{formatSuggestedDate(value)} {typeof row === 'object' && row?.channel ? `· ${row.channel}` : ''} {typeof row === 'object' && row?.status ? `· ${row.status}` : ''}</div>;
+              })}
             </div>
           )}
         </div>
