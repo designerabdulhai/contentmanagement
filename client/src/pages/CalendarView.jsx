@@ -16,6 +16,12 @@ function startOfGrid(date){
   return new Date(date.getFullYear(), date.getMonth(), 1-first.getDay());
 }
 
+function formatTime(value){
+  if(!value) return '';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+}
+
 export default function CalendarView(){
   const [current, setCurrent] = useState(()=>new Date());
   const [posts, setPosts] = useState([]);
@@ -69,13 +75,11 @@ export default function CalendarView(){
     return map;
   },[posts]);
 
-  const monthPosts = useMemo(()=>{
-    return posts.filter(post=>{
-      if(!post?.scheduled_at) return false;
-      const d = new Date(post.scheduled_at);
-      return !Number.isNaN(d.getTime()) && d.getFullYear()===current.getFullYear() && d.getMonth()===current.getMonth();
-    });
-  },[posts,current]);
+  const monthPosts = useMemo(()=>posts.filter(post=>{
+    if(!post?.scheduled_at) return false;
+    const d = new Date(post.scheduled_at);
+    return !Number.isNaN(d.getTime()) && d.getFullYear()===current.getFullYear() && d.getMonth()===current.getMonth();
+  }),[posts,current]);
 
   const goMonth = (delta)=>setCurrent(d=>new Date(d.getFullYear(),d.getMonth()+delta,1));
   const goToday = ()=>setCurrent(new Date());
@@ -117,8 +121,12 @@ export default function CalendarView(){
               <div className="calendar-items">
                 {items.slice(0,5).map(post=>(
                   <button key={post.id} type="button" className={`calendar-item ${post.status?.toLowerCase()||''}`} onClick={()=>window.dispatchEvent(new CustomEvent('editPost',{detail:post}))}>
-                    <span className="calendar-item-title">{post.project_name || '(untitled)'}</span>
+                    <div className="calendar-item-top">
+                      <span className="calendar-item-title">{post.project_name || '(untitled)'}</span>
+                      <span className="calendar-item-time">{formatTime(post.scheduled_at)}</span>
+                    </div>
                     {post.content_type ? <small>{post.content_type}</small> : null}
+                    {post.channel || post.platform ? <small>{[post.channel, post.platform].filter(Boolean).join(' • ')}</small> : null}
                   </button>
                 ))}
                 {items.length>5 && <div className="calendar-more">+{items.length-5} more</div>}
