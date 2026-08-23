@@ -2,6 +2,21 @@ import React, {useEffect, useState, useRef} from 'react'
 import api from '../api'
 import LinkActions from './LinkActions'
 
+function toDateTimeLocal(value){
+  if(!value) return '';
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return value;
+  const pad = (n)=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatSuggestedDate(value){
+  if(!value) return '';
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+}
+
 export default function PostForm({onSaved,onCancel}){
   const empty = {project_name:'', content_type:'', channel:'', platform:'', status:'Listed', scheduled_at:'', uploaded_link:'', notes:''};
   const [post, setPost] = useState(empty);
@@ -35,7 +50,7 @@ export default function PostForm({onSaved,onCancel}){
     }).finally(()=>{
       if(alive) setLoadingSettings(false);
     });
-    const onEdit = (e)=> setPost(e.detail || empty);
+    const onEdit = (e)=> setPost({...empty, ...(e.detail || {}), scheduled_at:toDateTimeLocal(e.detail?.scheduled_at)});
     window.addEventListener('editPost', onEdit);
     return ()=>{
       alive = false;
@@ -45,7 +60,8 @@ export default function PostForm({onSaved,onCancel}){
   },[])
 
   const save = ()=>{
-    const request = post.id ? api.put('/posts/'+post.id, post) : api.post('/posts', post);
+    const payload = {...post, scheduled_at: post.scheduled_at || null};
+    const request = post.id ? api.put('/posts/'+post.id, payload) : api.post('/posts', payload);
     request.then(r=>{ onSaved && onSaved(r.data); }).catch(()=>{});
   }
 
@@ -89,8 +105,8 @@ export default function PostForm({onSaved,onCancel}){
       return;
     }
     api.get('/posts/project-suggestions', { params: { query: q } }).then(res=>{
-      suggestionsCache.current[key] = res.data;
-      setSuggestions(res.data);
+      suggestionsCache.current[key] = Array.isArray(res.data) ? res.data : [];
+      setSuggestions(suggestionsCache.current[key]);
       setShowSuggestions(true);
     }).catch(()=>{});
   }
@@ -124,18 +140,18 @@ export default function PostForm({onSaved,onCancel}){
     <div className="postform drawer">
       <h3 id="create-post-title">{post.id? 'Edit Post':'Create New Post'}</h3>
       {loadingSettings && <div className="setting-help">Loading form options…</div>}
-      {settingsError && <div className="setting-help">{settingsError}</div>}
+      {settingsError && <div className="setting-help form-error">{settingsError}</div>}
       <div className="form-grid">
-        <div style={{position:'relative'}}>
-          <input placeholder="Project Name" value={post.project_name||''} onChange={e=>onProjectNameChange(e.target.value)} onBlur={(e)=>{ setTimeout(()=>setShowSuggestions(false), 150); maybeShowPanelForName(e.target.value); }} />
+        <div className="project-field">
+          <input placeholder="Project Name" value={post.project_name||''} onChange={e=>onProjectNameChange(e.target.value)} onBlur={(e)=>{ setTimeout(()=>setShowSuggestions(false), 180); maybeShowPanelForName(e.target.value); }} />
 
           {showSuggestions && suggestions.length>0 && (
-            <div className="suggestions-dropdown card">
+            <div className="suggestions-dropdown">
               {suggestions.map(s=> (
-                <div key={s.project_name} className="suggestion-item" onClick={()=>selectSuggestion(s)}>
-                  <div className="suggestion-name">{s.project_name}</div>
-                  <div className="suggestion-meta">{s.count} past schedules</div>
-                </div>
+                <button type="button" key={s.project_name} className="suggestion-item" onMouseDown={e=>e.preventDefault()} onClick={()=>selectSuggestion(s)}>
+                  <span className="suggestion-name">{s.project_name}</span>
+                  <span className="suggestion-meta"><span>{s.count} past {s.count===1?'schedule':'schedules'}</span>{s.last_scheduled_at && <span className="suggestion-date">Last: {formatSuggestedDate(s.last_scheduled_at)}</span>}</span>
+                </button>
               ))}
             </div>
           )}
@@ -146,12 +162,12 @@ export default function PostForm({onSaved,onCancel}){
           {contentTypes.map((s, index)=> <option key={`${s}-${index}`} value={s}>{s}</option>)}
         </select>
 
-        <div style={{gridColumn:'1 / -1', display:'flex', gap:8, alignItems:'center'}}>
+        <div className="template-row">
           <select onChange={e=>useTemplate(e.target.value)} defaultValue="" disabled={loadingSettings}>
             <option value="">Use Template</option>
             {templates.map((t,index)=> <option key={t.id ?? index} value={t.id}>{t.name}</option>)}
           </select>
-          <button type="button" onClick={saveTemplate}>Save as Template</button>
+          <button className="btn-secondary" type="button" onClick={saveTemplate}>Save as Template</button>
         </div>
 
         <select value={post.channel||''} onChange={e=>setPost({...post, channel:e.target.value})} disabled={loadingSettings}>
@@ -167,27 +183,30 @@ export default function PostForm({onSaved,onCancel}){
           <option value="Scheduled">Scheduled</option>
           <option value="Uploaded">Uploaded</option>
         </select>
-        <input type="datetime-local" value={post.scheduled_at||''} onChange={e=>setPost({...post, scheduled_at:e.target.value})} />
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+        <div className="schedule-field">
+          <label htmlFor="schedule-datetime">Schedule Date &amp; Time</label>
+          <input id="schedule-datetime" type="datetime-local" value={post.scheduled_at||''} onChange={e=>setPost({...post, scheduled_at:e.target.value})} />
+        </div>
+        <div className="uploaded-link-field">
           <input placeholder="Uploaded Link" value={post.uploaded_link||''} onChange={e=>setPost({...post, uploaded_link:e.target.value})} onPaste={onPasteLink} />
           <LinkActions url={post.uploaded_link} />
         </div>
         {autoFillHint && <div className="autofill-hint">{autoFillHint} <button type="button" onClick={()=>{ setPost({...post, channel:'', platform:''}); setAutoFillHint(null); }}>Undo</button></div>}
-        <textarea placeholder="Notes" value={post.notes||''} onChange={e=>setPost({...post, notes:e.target.value})} />
+        <textarea className="notes-field" placeholder="Notes" value={post.notes||''} onChange={e=>setPost({...post, notes:e.target.value})} />
       </div>
       {selectedProjectPanel && (
         <div className="project-panel card">
           <div className="panel-header">
             <strong>Previous schedules for this project</strong>
             <div className="panel-controls">
-              <button type="button" onClick={()=>setPanelOpen(!panelOpen)}>{panelOpen? 'Collapse':'Expand'}</button>
-              <button type="button" onClick={()=>setSelectedProjectPanel(null)}>Dismiss</button>
+              <button type="button" className="btn-secondary" onClick={()=>setPanelOpen(!panelOpen)}>{panelOpen? 'Collapse':'Expand'}</button>
+              <button type="button" className="btn-secondary" onClick={()=>setSelectedProjectPanel(null)}>Dismiss</button>
             </div>
           </div>
           {panelOpen && (
             <div className="panel-body">
               {Array.isArray(selectedProjectPanel.last_scheduled_dates) && selectedProjectPanel.last_scheduled_dates.map((row, idx)=> (
-                <div className="panel-row" key={idx}>{row}</div>
+                <div className="panel-row" key={idx}>{formatSuggestedDate(row)}</div>
               ))}
             </div>
           )}
@@ -195,7 +214,7 @@ export default function PostForm({onSaved,onCancel}){
       )}
       <div className="form-actions">
         <button className="btn-primary" type="button" onClick={save}>Save</button>
-        <button type="button" onClick={()=>{ setPost(empty); onCancel ? onCancel() : document.getElementById('createModal')?.classList.add('hidden'); }}>Cancel</button>
+        <button className="btn-secondary" type="button" onClick={()=>{ setPost(empty); onCancel ? onCancel() : document.getElementById('createModal')?.classList.add('hidden'); }}>Cancel</button>
       </div>
     </div>
   )
