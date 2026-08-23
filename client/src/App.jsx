@@ -22,6 +22,7 @@ export default function App(){
   const [managers, setManagers] = useState([]);
   const [theme, setTheme] = useState('light');
   const [profile, setProfile] = useState(defaultProfile);
+  const [modalRequest, setModalRequest] = useState(null);
 
   const loadProfile = () => api.get('/settings').then(r => setProfile(profileFromSettings(r.data))).catch(()=>{});
 
@@ -36,22 +37,33 @@ export default function App(){
     return ()=>window.removeEventListener('profileUpdated', onProfileUpdated);
   },[])
 
+  // Cross-page actions: navigate first, then let ListView open its own mounted modal.
   useEffect(()=>{
-    const openPost = () => {
+    const requestPost = () => {
       setRoute('list');
-      setTimeout(()=>window.dispatchEvent(new CustomEvent('openPostModalOnly')), 50);
+      setModalRequest('post');
     };
-    const openBulk = () => {
+    const requestBulk = () => {
       setRoute('list');
-      setTimeout(()=>window.dispatchEvent(new CustomEvent('openBulkModalOnly')), 50);
+      setModalRequest('bulk');
     };
-    window.addEventListener('openPostModal', openPost);
-    window.addEventListener('openBulkModal', openBulk);
+    window.addEventListener('requestNewPost', requestPost);
+    window.addEventListener('requestBulkCreate', requestBulk);
     return ()=>{
-      window.removeEventListener('openPostModal', openPost);
-      window.removeEventListener('openBulkModal', openBulk);
+      window.removeEventListener('requestNewPost', requestPost);
+      window.removeEventListener('requestBulkCreate', requestBulk);
     };
   },[])
+
+  useEffect(()=>{
+    if(route !== 'list' || !modalRequest) return;
+    const request = modalRequest;
+    const timer = window.setTimeout(()=>{
+      window.dispatchEvent(new CustomEvent(request === 'post' ? 'openPostModal' : 'openBulkModal'));
+      setModalRequest(null);
+    }, 0);
+    return ()=>window.clearTimeout(timer);
+  },[route, modalRequest])
 
   useEffect(()=>{
     const onNavigateToList = ()=>setRoute('list');
@@ -64,8 +76,7 @@ export default function App(){
       if(e.key.toLowerCase()==='n'){
         const active = document.activeElement;
         if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA' || active.isContentEditable)) return;
-        setRoute('list');
-        setTimeout(()=>window.dispatchEvent(new CustomEvent('openPostModalOnly')), 50);
+        window.dispatchEvent(new CustomEvent('requestNewPost'));
       }
       if(e.key==='?') alert('Keyboard shortcuts:\nN — New post\n? — Help');
     }
