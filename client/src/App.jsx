@@ -39,11 +39,11 @@ export default function App(){
   useEffect(()=>{
     const openPost = () => {
       setRoute('list');
-      setTimeout(()=>window.dispatchEvent(new CustomEvent('openPostModal')), 50);
+      setTimeout(()=>window.dispatchEvent(new CustomEvent('openPostModalOnly')), 50);
     };
     const openBulk = () => {
       setRoute('list');
-      setTimeout(()=>window.dispatchEvent(new CustomEvent('openBulkModal')), 50);
+      setTimeout(()=>window.dispatchEvent(new CustomEvent('openBulkModalOnly')), 50);
     };
     window.addEventListener('openPostModal', openPost);
     window.addEventListener('openBulkModal', openBulk);
@@ -65,7 +65,7 @@ export default function App(){
         const active = document.activeElement;
         if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA' || active.isContentEditable)) return;
         setRoute('list');
-        setTimeout(()=>window.dispatchEvent(new CustomEvent('openPostModal')), 50);
+        setTimeout(()=>window.dispatchEvent(new CustomEvent('openPostModalOnly')), 50);
       }
       if(e.key==='?') alert('Keyboard shortcuts:\nN — New post\n? — Help');
     }
