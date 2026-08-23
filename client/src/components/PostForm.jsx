@@ -13,13 +13,36 @@ export default function PostForm({onSaved}){
   const [selectedProjectPanel, setSelectedProjectPanel] = useState(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const [templates, setTemplates] = useState([]);
-  useEffect(()=>{ api.get('/settings').then(r=>setSettings(r.data));
-    api.get('/templates').then(r=> setTemplates(r.data)).catch(()=>{});
-    const onEdit = (e)=> setPost(e.detail);
-    window.addEventListener('editPost', onEdit);
-    return ()=>window.removeEventListener('editPost', onEdit);
-  },[])
   const [autoFillHint, setAutoFillHint] = useState(null);
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [settingsError, setSettingsError] = useState('');
+
+  useEffect(()=>{
+    let alive = true;
+    Promise.all([
+      api.get('/settings'),
+      api.get('/templates').catch(()=>({data:[]}))
+    ]).then(([settingsResponse, templatesResponse])=>{
+      if(!alive) return;
+      setSettings(settingsResponse?.data || {});
+      setTemplates(Array.isArray(templatesResponse?.data) ? templatesResponse.data : []);
+      setSettingsError('');
+    }).catch((error)=>{
+      if(!alive) return;
+      setSettingsError(error?.message || 'Could not load form options.');
+      setSettings({});
+      setTemplates([]);
+    }).finally(()=>{
+      if(alive) setLoadingSettings(false);
+    });
+    const onEdit = (e)=> setPost(e.detail || empty);
+    window.addEventListener('editPost', onEdit);
+    return ()=>{
+      alive = false;
+      window.removeEventListener('editPost', onEdit);
+      if(debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  },[])
 
   const save = ()=>{
     if(post.id) api.put('/posts/'+post.id, post).then(r=>{ onSaved && onSaved(r.data); });
@@ -57,7 +80,6 @@ export default function PostForm({onSaved}){
     }
   }
 
-  // Helpers for project name autocomplete
   const queryProjectSuggestions = (q)=>{
     if(!q) { setSuggestions([]); setShowSuggestions(false); return; }
     const key = q.toLowerCase();
@@ -76,7 +98,6 @@ export default function PostForm({onSaved}){
   const onProjectNameChange = (val)=>{
     setPost({...post, project_name: val});
     setSelectedProjectPanel(null);
-    // debounce
     if(debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(()=> queryProjectSuggestions(val), 300);
   }
@@ -90,24 +111,20 @@ export default function PostForm({onSaved}){
 
   const maybeShowPanelForName = (name)=>{
     if(!name) return;
-    // look in cache for exact match
     const key = name.toLowerCase();
     const found = suggestionsCache.current[key] || suggestions.find(x=>x.project_name.toLowerCase()===key);
     if(found){ setSelectedProjectPanel(found); setPanelOpen(true); }
   }
 
-  // Suggest next likely date if pattern exists
-  const computeNextFromPattern = (dates)=>{
-    // dates are labels like 'Aug 12, 2026 · ...' but we also have raw ISO in API? We only returned formatted labels.
-    // For simplicity, try to parse actual scheduled_at from cache by re-querying server for exact project details.
-    // We'll implement a heuristic: if last_scheduled_dates have at least 3 entries with same weekday, suggest next weekday at same time.
-    return null; // lightweight: not implemented fully here
-  }
-
+  const contentTypes = Array.isArray(settings.content_types) ? settings.content_types : [];
+  const channels = Array.isArray(settings.channels) ? settings.channels : [];
+  const platforms = Array.isArray(settings.platforms) ? settings.platforms : [];
 
   return (
     <div className="postform drawer">
       <h3>{post.id? 'Edit Post':'Create New Post'}</h3>
+      {loadingSettings && <div className="setting-help">Loading form options…</div>}
+      {settingsError && <div className="setting-help">{settingsError}</div>}
       <div className="form-grid">
         <div style={{position:'relative'}}>
           <input placeholder="Project Name" value={post.project_name||''} onChange={e=>onProjectNameChange(e.target.value)} onBlur={(e)=>{ setTimeout(()=>setShowSuggestions(false), 150); maybeShowPanelForName(e.target.value); }} />
@@ -123,24 +140,27 @@ export default function PostForm({onSaved}){
             </div>
           )}
         </div>
-        <select value={post.content_type||''} onChange={e=>setPost({...post, content_type:e.target.value})}>
+
+        <select value={post.content_type||''} onChange={e=>setPost({...post, content_type:e.target.value})} disabled={loadingSettings}>
           <option value="">-- Content Type --</option>
-          {(settings.content_types||[]).map(s=> <option key={s} value={s}>{s}</option>)}
+          {contentTypes.map((s, index)=> <option key={`${s}-${index}`} value={s}>{s}</option>)}
         </select>
+
         <div style={{gridColumn:'1 / -1', display:'flex', gap:8, alignItems:'center'}}>
-          <select onChange={e=>useTemplate(e.target.value)} defaultValue="">
+          <select onChange={e=>useTemplate(e.target.value)} defaultValue="" disabled={loadingSettings}>
             <option value="">Use Template</option>
-            {templates.map(t=> <option key={t.id} value={t.id}>{t.name}</option>)}
+            {templates.map((t,index)=> <option key={t.id ?? index} value={t.id}>{t.name}</option>)}
           </select>
-          <button onClick={saveTemplate}>Save as Template</button>
+          <button type="button" onClick={saveTemplate}>Save as Template</button>
         </div>
-        <select value={post.channel||''} onChange={e=>setPost({...post, channel:e.target.value})}>
+
+        <select value={post.channel||''} onChange={e=>setPost({...post, channel:e.target.value})} disabled={loadingSettings}>
           <option value="">-- Channel --</option>
-          {(settings.channels||[]).map(s=> <option key={s} value={s}>{s}</option>)}
+          {channels.map((s,index)=> <option key={`${s}-${index}`} value={s}>{s}</option>)}
         </select>
-        <select value={post.platform||''} onChange={e=>setPost({...post, platform:e.target.value})}>
+        <select value={post.platform||''} onChange={e=>setPost({...post, platform:e.target.value})} disabled={loadingSettings}>
           <option value="">-- Platform --</option>
-          {(settings.platforms||[]).map(s=> <option key={s} value={s}>{s}</option>)}
+          {platforms.map((s,index)=> <option key={`${s}-${index}`} value={s}>{s}</option>)}
         </select>
         <select value={post.status||''} onChange={e=>setPost({...post, status:e.target.value})}>
           <option value="Listed">Listed</option>
@@ -152,22 +172,21 @@ export default function PostForm({onSaved}){
           <input placeholder="Uploaded Link" value={post.uploaded_link||''} onChange={e=>setPost({...post, uploaded_link:e.target.value})} onPaste={onPasteLink} />
           <LinkActions url={post.uploaded_link} />
         </div>
-        {autoFillHint && <div className="autofill-hint">{autoFillHint} <button onClick={()=>{ setPost({...post, channel:'', platform:''}); setAutoFillHint(null); }}>Undo</button></div>}
+        {autoFillHint && <div className="autofill-hint">{autoFillHint} <button type="button" onClick={()=>{ setPost({...post, channel:'', platform:''}); setAutoFillHint(null); }}>Undo</button></div>}
         <textarea placeholder="Notes" value={post.notes||''} onChange={e=>setPost({...post, notes:e.target.value})} />
       </div>
-      {/* Inline previous schedules panel */}
       {selectedProjectPanel && (
         <div className="project-panel card">
           <div className="panel-header">
             <strong>Previous schedules for this project</strong>
             <div className="panel-controls">
-              <button onClick={()=>setPanelOpen(!panelOpen)}>{panelOpen? 'Collapse':'Expand'}</button>
-              <button onClick={()=>setSelectedProjectPanel(null)}>Dismiss</button>
+              <button type="button" onClick={()=>setPanelOpen(!panelOpen)}>{panelOpen? 'Collapse':'Expand'}</button>
+              <button type="button" onClick={()=>setSelectedProjectPanel(null)}>Dismiss</button>
             </div>
           </div>
           {panelOpen && (
             <div className="panel-body">
-              {selectedProjectPanel.last_scheduled_dates.map((row, idx)=> (
+              {Array.isArray(selectedProjectPanel.last_scheduled_dates) && selectedProjectPanel.last_scheduled_dates.map((row, idx)=> (
                 <div className="panel-row" key={idx}>{row}</div>
               ))}
             </div>
@@ -175,8 +194,8 @@ export default function PostForm({onSaved}){
         </div>
       )}
       <div className="form-actions">
-        <button className="btn-primary" onClick={save}>Save</button>
-        <button onClick={()=>{ setPost(empty); document.getElementById('createModal').classList.add('hidden'); }}>Cancel</button>
+        <button className="btn-primary" type="button" onClick={save}>Save</button>
+        <button type="button" onClick={()=>{ setPost(empty); document.getElementById('createModal')?.classList.add('hidden'); }}>Cancel</button>
       </div>
     </div>
   )
