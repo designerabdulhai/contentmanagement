@@ -27,44 +27,70 @@ function weeklyCounts(posts){
 }
 
 function AreaChart({title, data}){
-  const entries = WEEKDAYS.map(day=>[day, data[day] || 0]);
+  const [hovered, setHovered] = useState(null);
+  const entries = title === 'Posts by Day'
+    ? WEEKDAYS.map(day=>[day, data[day] || 0])
+    : Object.entries(data);
   const values = entries.map(([,v])=>v);
   const max = Math.max(...values, 1);
   const width = 640, height = 280, left = 44, right = 22, top = 26, bottom = 38;
   const chartW = width-left-right, chartH = height-top-bottom;
   const points = entries.map(([,v], i)=>({
-    x: left + (i/(entries.length-1))*chartW,
+    x: entries.length === 1 ? width/2 : left + (i/(entries.length-1))*chartW,
     y: top + chartH - (v/max)*chartH,
     value:v
   }));
   const line = points.map((p,i)=>`${i?'L':'M'} ${p.x} ${p.y}`).join(' ');
-  const area = `${line} L ${points.at(-1).x} ${top+chartH} L ${points[0].x} ${top+chartH} Z`;
+  const lastPoint = points[points.length-1] || {x:left};
+  const firstPoint = points[0] || {x:left};
+  const area = `${line} L ${lastPoint.x} ${top+chartH} L ${firstPoint.x} ${top+chartH} Z`;
   const grid = [0,.25,.5,.75,1];
+  const gradientId = `areaGradient-${title.replace(/[^a-z0-9]/gi,'-')}`;
+
   return <div className="chart card dashboard-chart-card">
     <div className="card-header"><div><h3>{title}</h3></div><span className="chart-total">{values.reduce((a,b)=>a+b,0)}</span></div>
     <div className="reference-chart-wrap">
-      <svg viewBox={`0 0 ${width} ${height}`} className="reference-chart" role="img" aria-label={title}>
-        <defs><linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#6c5ce7" stopOpacity="0.34"/><stop offset="100%" stopColor="#6c5ce7" stopOpacity="0.08"/></linearGradient></defs>
+      <svg viewBox={`0 0 ${width} ${height}`} className="reference-chart" role="img" aria-label={`${title}. Hover a point to see its data.`}>
+        <defs><linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#6c5ce7" stopOpacity="0.34"/><stop offset="100%" stopColor="#6c5ce7" stopOpacity="0.08"/></linearGradient></defs>
         {grid.map((r,i)=>{const y=top+chartH-r*chartH;return <g key={i}><line x1={left} x2={width-right} y1={y} y2={y} className="reference-grid-line"/><text x={8} y={y+4} className="reference-axis-label">{Math.round(max*r)}</text></g>})}
-        <path d={area} fill="url(#areaGradient)" className="reference-area"/>
+        <path d={area} fill={`url(#${gradientId})`} className="reference-area"/>
         <path d={line} className="reference-line"/>
-        {points.map((p,i)=><g key={i}><circle cx={p.x} cy={p.y} r="5" className="reference-point"/><title>{`${entries[i][0]}: ${p.value}`}</title></g>)}
+        {points.map((p,i)=>{
+          const isHovered = hovered === i;
+          const label = entries[i][0];
+          const tooltipW = Math.max(96, label.length * 7 + 52);
+          const tooltipX = Math.min(Math.max(p.x - tooltipW/2, 4), width-tooltipW-4);
+          const tooltipY = Math.max(p.y - 48, 4);
+          return <g key={i} onMouseEnter={()=>setHovered(i)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setHovered(i)} onBlur={()=>setHovered(null)}>
+            <circle cx={p.x} cy={p.y} r={isHovered ? 7 : 5} className="reference-point" tabIndex="0" role="button" aria-label={`${label}: ${p.value}`}/>
+            {isHovered && <g className="chart-hover-tooltip" pointerEvents="none">
+              <rect x={tooltipX} y={tooltipY} width={tooltipW} height="38" rx="7" className="chart-tooltip-bg"/>
+              <text x={tooltipX+10} y={tooltipY+15} className="chart-tooltip-title">{label}</text>
+              <text x={tooltipX+10} y={tooltipY+30} className="chart-tooltip-value">{p.value} post{p.value === 1 ? '' : 's'}</text>
+            </g>}
+          </g>
+        })}
         {entries.map(([label],i)=><text key={label} x={points[i].x} y={height-10} textAnchor="middle" className="reference-axis-label">{label}</text>)}
       </svg>
     </div>
   </div>
 }
 
-function BarChart({title, data, horizontal=false}){
+function BarChart({title, data}){
+  const [hovered, setHovered] = useState(null);
   const entries = Object.entries(data);
   const max = Math.max(...entries.map(([,v])=>v),1);
   return <div className="chart card dashboard-chart-card">
     <div className="card-header"><h3>{title}</h3><span className="chart-total">{entries.reduce((a,[,v])=>a+v,0)}</span></div>
-    <div className={`reference-bars ${horizontal?'horizontal':''}`}>
-      {entries.length ? entries.map(([label,value],i)=><div className="reference-bar-row" key={label}>
-        <div className="reference-bar-label" title={label}>{label}</div>
-        <div className="reference-bar-track"><div className="reference-bar-fill" style={{width:`${Math.max(8,(value/max)*100)}%`,background:PALETTE[i%PALETTE.length]}}><span>{value}</span></div></div>
-      </div>) : <div className="chart-empty">No data yet</div>}
+    <div className="reference-bars">
+      {entries.length ? entries.map(([label,value],i)=>{
+        const isHovered = hovered === label;
+        return <div className="reference-bar-row" key={label} onMouseEnter={()=>setHovered(label)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setHovered(label)} onBlur={()=>setHovered(null)} tabIndex="0" role="button" aria-label={`${label}: ${value}`}>
+          <div className="reference-bar-label" title={label}>{label}</div>
+          <div className="reference-bar-track"><div className="reference-bar-fill" style={{width:`${Math.max(8,(value/max)*100)}%`,background:PALETTE[i%PALETTE.length]}}><span>{value}</span></div></div>
+          {isHovered && <div className="chart-html-tooltip"><strong>{label}</strong><span>{value} post{value === 1 ? '' : 's'}</span></div>}
+        </div>
+      }) : <div className="chart-empty">No data yet</div>}
     </div>
   </div>
 }
@@ -99,7 +125,12 @@ export default function Dashboard(){
   return <div className="page dashboard">
     <div className="dashboard-header" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,marginBottom:18}}><div><h2 style={{margin:'0 0 4px'}}>Dashboard</h2><div style={{color:'var(--muted)',fontSize:13}}>Manage projects and scheduled content from one place.</div></div><div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}}><button className="btn-secondary" type="button" onClick={()=>window.dispatchEvent(new CustomEvent('requestBulkCreate'))}>Bulk Create</button><button className="btn-primary" type="button" onClick={()=>window.dispatchEvent(new CustomEvent('requestNewPost'))}>+ New Scheduled Post</button></div></div>
     <div className="cards">{stats.map(s=><div className="card stat-card" key={s.key}><div className="stat-badge">{s.icon}</div><div className="stat-body"><div className="stat-label">{s.label}</div><div className="stat-value">{s.value}</div><div className="stat-trend">{s.trend}</div></div></div>)}</div>
-    <div className="charts dashboard-chart-grid"><AreaChart title="Posts by Day" data={dayCounts}/><AreaChart title="Posts by Channel" data={dayCounts}/><AreaChart title="Posts by Content Type" data={dayCounts}/><BarChart title="Content Mix" data={typeCounts}/></div>
+    <div className="charts dashboard-chart-grid">
+      <AreaChart title="Posts by Day" data={dayCounts}/>
+      <AreaChart title="Posts by Channel" data={channelCounts}/>
+      <AreaChart title="Posts by Content Type" data={typeCounts}/>
+      <BarChart title="Content Mix" data={typeCounts}/>
+    </div>
     <div className="recent card"><h3>Recent activity</h3><ul>{posts.slice(-10).reverse().map(p=><li key={p.id}>{p.project_name||'(untitled)'} — {p.status} — {p.scheduled_at||'no date'}</li>)}</ul></div>
     <div className="card due-soon"><h3>Due Today / This Week</h3><ul>{dueSoon.map(p=><li key={p.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><div style={{display:'flex',alignItems:'center',gap:8}}><div>{p.project_name||'(untitled)'} — {p.channel} — {p.scheduled_at}</div><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link}/></div><div><button type="button" onClick={()=>api.post('/posts/'+p.id+'/mark-uploaded',{uploaded_link:p.uploaded_link||null}).then(()=>{setDueSoon(ds=>ds.filter(x=>x.id!==p.id));loadDashboard()})}>Mark Uploaded</button></div></li>)}</ul><div><button type="button" onClick={()=>window.dispatchEvent(new CustomEvent('navigateToList'))}>View all</button></div></div>
   </div>
