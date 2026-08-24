@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_URL || '/api';
+// Cloudflare Worker is the production API. Set VITE_API_URL in Vercel to:
+// https://contentmanagement-api.rubel-bhd1.workers.dev/api
+const baseURL = import.meta.env.VITE_API_URL || 'https://contentmanagement-api.rubel-bhd1.workers.dev/api';
 const TOKEN_KEY = 'content_schedule_auth_token';
 
 const api = axios.create({
