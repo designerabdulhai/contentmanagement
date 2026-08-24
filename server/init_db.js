@@ -1,5 +1,11 @@
 const Database = require('better-sqlite3');
+const crypto = require('crypto');
 const db = new Database('data.sqlite');
+
+const hashPassword = (password, salt = crypto.randomBytes(16).toString('hex')) => {
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return { hash, salt };
+};
 
 db.exec(`
 PRAGMA foreign_keys = ON;
@@ -9,6 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE,
   photo TEXT,
   role TEXT DEFAULT 'owner',
+  password_hash TEXT,
+  password_salt TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -78,5 +86,25 @@ INSERT OR IGNORE INTO settings(key, value) VALUES ('channels', 'Instagram,YouTub
 INSERT OR IGNORE INTO settings(key, value) VALUES ('platforms', 'Meta,Google,TikTok,Direct');
 INSERT OR IGNORE INTO settings(key, value) VALUES ('statuses', 'Listed,Scheduled,Uploaded');
 `);
+
+// Backward-compatible migration for an existing database created before auth was added.
+try { db.exec('ALTER TABLE users ADD COLUMN password_hash TEXT'); } catch (_) {}
+try { db.exec('ALTER TABLE users ADD COLUMN password_salt TEXT'); } catch (_) {}
+
+// Create/update the requested owner account. The password is stored as a salted scrypt hash,
+// never in plaintext in the repository.
+const email = 'rubel.bhd1@gmail.com';
+const password = process.env.INIT_ADMIN_PASSWORD;
+if (password) {
+  const existing = db.prepare('SELECT id FROM users WHERE lower(email)=lower(?)').get(email);
+  const { hash, salt } = hashPassword(password);
+  if (existing) {
+    db.prepare('UPDATE users SET display_name=?, role=?, password_hash=?, password_salt=? WHERE id=?')
+      .run('Rubel', 'owner', hash, salt, existing.id);
+  } else {
+    db.prepare('INSERT INTO users(display_name,email,role,password_hash,password_salt) VALUES (?,?,?,?,?)')
+      .run('Rubel', email, 'owner', hash, salt);
+  }
+}
 
 console.log('Initialized database: data.sqlite');
