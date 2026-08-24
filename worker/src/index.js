@@ -111,6 +111,14 @@ async function handle(request, env) {
     if (!user) return json({ error: 'authentication required' }, 401);
   }
 
+  // Manual full D1 -> Google Sheets sync. This is useful for the first sync
+  // and also exposes the exact Google Apps Script error instead of silently
+  // swallowing it in the normal write flow.
+  if (method === 'POST' && path === '/api/google-sheets/sync') {
+    const result = await syncAllToGoogleSheets(env);
+    return json(result, result.ok ? 200 : 502);
+  }
+
   if (method === 'GET' && path === '/api/posts') {
     const result = await db.prepare(`SELECT p.*, u.display_name AS owner FROM posts p LEFT JOIN users u ON p.created_by = u.id ORDER BY p.scheduled_at IS NULL, p.scheduled_at`).all();
     return json(result.results || []);
@@ -159,8 +167,10 @@ export default {
       const path = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
       const isWrite = ['POST', 'PUT', 'DELETE'].includes(request.method);
       const isAuth = path.startsWith('/api/auth/');
-      if (isWrite && !isAuth && response.status < 400) {
-        await syncAllToGoogleSheets(env);
+      const isManualSync = path === '/api/google-sheets/sync';
+      if (isWrite && !isAuth && !isManualSync && response.status < 400) {
+        const syncResult = await syncAllToGoogleSheets(env);
+        if (!syncResult.ok) console.error('Automatic Google Sheets sync failed:', syncResult.error);
       }
 
       return response;
