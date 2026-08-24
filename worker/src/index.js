@@ -105,18 +105,30 @@ async function handle(request, env) {
     return json({ user: { id: user.id, display_name: user.display_name, email: user.email, photo: user.photo, role: user.role } });
   }
 
-  const publicPaths = new Set(['/api/health', '/api/auth/login', '/api/auth/logout', '/api/auth/me']);
+  // Google Sheets diagnostics. Status is safe to call without authentication.
+  if (method === 'GET' && path === '/api/google-sheets/status') {
+    return json({
+      ok: Boolean(env.GSHEET_WEBHOOK_URL && env.GSHEET_SYNC_SECRET && env.DB),
+      database: Boolean(env.DB),
+      webhookConfigured: Boolean(env.GSHEET_WEBHOOK_URL),
+      secretConfigured: Boolean(env.GSHEET_SYNC_SECRET),
+      syncEndpoint: '/api/google-sheets/sync'
+    });
+  }
+
+  // Manual full D1 -> Google Sheets sync.
+  // Requires the normal logged-in session and returns the exact Apps Script error.
+  if (method === 'POST' && path === '/api/google-sheets/sync') {
+    const user = await requireAuth(request, db);
+    if (!user) return json({ error: 'authentication required' }, 401);
+    const result = await syncAllToGoogleSheets(env);
+    return json(result, result.ok ? 200 : 502);
+  }
+
+  const publicPaths = new Set(['/api/health', '/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/google-sheets/status']);
   if (!publicPaths.has(path)) {
     const user = await requireAuth(request, db);
     if (!user) return json({ error: 'authentication required' }, 401);
-  }
-
-  // Manual full D1 -> Google Sheets sync. This is useful for the first sync
-  // and also exposes the exact Google Apps Script error instead of silently
-  // swallowing it in the normal write flow.
-  if (method === 'POST' && path === '/api/google-sheets/sync') {
-    const result = await syncAllToGoogleSheets(env);
-    return json(result, result.ok ? 200 : 502);
   }
 
   if (method === 'GET' && path === '/api/posts') {
