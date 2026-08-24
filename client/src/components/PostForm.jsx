@@ -158,21 +158,40 @@ export default function PostForm({onSaved,onCancel}){
     setPanelOpen(true);
   }
 
-  const maybeShowPanelForName = (name)=>{
-    const key = String(name || '').trim().toLowerCase();
-    if(!key) return;
-    const cached = suggestionsCache.current[key];
-    if(Array.isArray(cached) && cached.length > 0){
-      setSelectedProjectPanel(cached[0]);
-      setPanelOpen(true);
-    } else {
-      queryProjectSuggestions(name);
-    }
-  }
-
   const contentTypes = Array.isArray(settings.content_types) ? settings.content_types : [];
   const channels = Array.isArray(settings.channels) ? settings.channels : [];
   const platforms = Array.isArray(settings.platforms) ? settings.platforms : [];
+
+  const renderProjectHistory = (project)=>{
+    if(!project) return null;
+    const rows = Array.isArray(project.last_scheduled_dates) ? project.last_scheduled_dates : [];
+    return (
+      <div className="project-history-under-name">
+        <div className="project-history-header">
+          <strong>Previous schedules</strong>
+          <span>{project.count || rows.length} total</span>
+        </div>
+        {rows.length > 0 ? rows.map((row, idx)=>{
+          const value = typeof row === 'string' ? row : row?.scheduled_at;
+          const contentType = typeof row === 'object' ? (row?.content_type || row?.type || project?.content_type) : project?.content_type;
+          return (
+            <div className="project-history-row" key={idx}>
+              <div className="project-history-name">{project.project_name || post.project_name}</div>
+              <div className="project-history-details">
+                <span>{formatSuggestedDate(value)}</span>
+                {contentType ? <span>{contentType}</span> : null}
+              </div>
+            </div>
+          );
+        }) : (
+          <div className="project-history-row">
+            <div className="project-history-name">{project.project_name || post.project_name}</div>
+            <div className="project-history-details"><span>No previous schedule found</span></div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="postform drawer">
@@ -208,6 +227,7 @@ export default function PostForm({onSaved,onCancel}){
               )}
             </div>
           )}
+          {selectedProjectPanel && panelOpen && renderProjectHistory(selectedProjectPanel)}
         </div>
 
         <select value={post.content_type||''} onChange={e=>setPost({...post, content_type:e.target.value})} disabled={loadingSettings}>
@@ -247,31 +267,6 @@ export default function PostForm({onSaved,onCancel}){
         {autoFillHint && <div className="autofill-hint">{autoFillHint} <button type="button" onClick={()=>{ setPost({...post, channel:'', platform:''}); setAutoFillHint(null); }}>Undo</button></div>}
         <textarea className="notes-field" placeholder="Notes" value={post.notes||''} onChange={e=>setPost({...post, notes:e.target.value})} />
       </div>
-      {selectedProjectPanel && (
-        <div className="project-panel card">
-          <div className="panel-header">
-            <strong>Previous schedules for this project</strong>
-            <div className="panel-controls">
-              <button type="button" className="btn-secondary" onClick={()=>setPanelOpen(!panelOpen)}>{panelOpen? 'Collapse':'Expand'}</button>
-              <button type="button" className="btn-secondary" onClick={()=>setSelectedProjectPanel(null)}>Dismiss</button>
-            </div>
-          </div>
-          {panelOpen && (
-            <div className="panel-body">
-              {Array.isArray(selectedProjectPanel.last_scheduled_dates) && selectedProjectPanel.last_scheduled_dates.length > 0 ? selectedProjectPanel.last_scheduled_dates.map((row, idx)=> {
-                const value = typeof row === 'string' ? row : row?.scheduled_at;
-                return <div className="panel-row" key={idx}>
-                  <div className="panel-row-date">{typeof row === 'object' && row?.label ? row.label : formatSuggestedDate(value)}</div>
-                  <div className="panel-row-meta">
-                    {typeof row === 'object' && row?.channel ? <span>{row.channel}</span> : null}
-                    {typeof row === 'object' && row?.status ? <span className={`panel-status ${String(row.status).toLowerCase()}`}>{row.status}</span> : null}
-                  </div>
-                </div>;
-              }) : <div className="panel-row">No previous schedules found for this project.</div>}
-            </div>
-          )}
-        </div>
-      )}
       <div className="form-actions">
         <button className="btn-primary" type="button" onClick={save}>Save</button>
         <button className="btn-secondary" type="button" onClick={()=>{ setPost(empty); onCancel ? onCancel() : document.getElementById('createModal')?.classList.add('hidden'); }}>Cancel</button>
