@@ -1,11 +1,11 @@
 {
   "version": 2,
-  "installCommand": "npm --prefix client install",
-  "buildCommand": "npm --prefix client run build",
-  "outputDirectory": "client/dist",
-  "framework": "vite",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "framework": null,
   "cleanUrls": true,
   "rewrites": [
+    { "source": "/api/:match*", "destination": "/api/:match*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
