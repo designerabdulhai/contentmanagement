@@ -1,4 +1,4 @@
-const GOOGLE_SHEETS_SYNC_VERSION = '2026-08-24-v2';
+const GOOGLE_SHEETS_SYNC_VERSION = '2026-08-24-v6';
 
 export async function syncAllToGoogleSheets(env) {
   const webhook = String(env.GSHEET_WEBHOOK_URL || '').trim();
@@ -13,11 +13,14 @@ export async function syncAllToGoogleSheets(env) {
   }
 
   try {
+    // Only read application tables. Cloudflare D1 may expose internal
+    // tables such as _cf_KV that are intentionally not queryable.
     const tableRows = await env.DB.prepare(`
       SELECT name
       FROM sqlite_master
       WHERE type = 'table'
         AND name NOT LIKE 'sqlite_%'
+        AND name NOT LIKE '_cf_%'
         AND name NOT IN ('sessions')
       ORDER BY name
     `).all();
@@ -26,7 +29,10 @@ export async function syncAllToGoogleSheets(env) {
 
     for (const item of tableRows.results || []) {
       const table = String(item.name || '');
-      if (!/^[A-Za-z0-9_]+$/.test(table)) continue;
+
+      if (!/^[A-Za-z0-9_]+$/.test(table)) {
+        continue;
+      }
 
       const result = await env.DB
         .prepare(`SELECT * FROM "${table}"`)
