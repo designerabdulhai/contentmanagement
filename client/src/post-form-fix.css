@@ -3,6 +3,7 @@
 .postform.drawer>h3{margin:0 0 20px;font-size:20px;line-height:1.2}
 .postform .form-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
 .postform .project-field,.postform .schedule-field,.postform .uploaded-link-field,.postform .template-row{min-width:0}
+.postform .project-field{position:relative}
 .postform .form-grid>input,.postform .form-grid>select,.postform .project-field>input,.postform .schedule-field input,.postform .uploaded-link-field>input,.postform .notes-field,.postform .template-row select{width:100%;min-height:42px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);outline:none}
 .postform .form-grid>input:focus,.postform .form-grid>select:focus,.postform .project-field>input:focus,.postform .schedule-field input:focus,.postform .uploaded-link-field>input:focus,.postform .notes-field:focus,.postform .template-row select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .postform .template-row{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
@@ -22,6 +23,13 @@
 .postform .suggestion-name{font-size:13px;font-weight:750;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .postform .suggestion-meta{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:0 0 auto;font-size:11px;color:var(--muted)}
 .postform .suggestion-date{color:var(--text);font-weight:600;white-space:nowrap}
+.postform .project-history-under-name{margin-top:8px;padding:9px;background:var(--bg);border:1px solid var(--border);border-radius:11px;box-shadow:0 5px 16px rgba(2,6,23,.06)}
+.postform .project-history-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;font-size:11px;color:var(--muted)}
+.postform .project-history-header strong{font-size:12px;color:var(--text)}
+.postform .project-history-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 9px;background:var(--card);border:1px solid var(--border);border-radius:8px}
+.postform .project-history-row+.project-history-row{margin-top:5px}
+.postform .project-history-name{font-size:12px;font-weight:700;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.postform .project-history-details{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--muted);text-align:right}
 .postform .project-panel{margin-top:14px;padding:14px;background:var(--bg);border-radius:12px}
 .postform .panel-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .postform .panel-header strong{font-size:13px}
@@ -31,4 +39,4 @@
 .postform .panel-row{font-size:12px;color:var(--text);padding:7px 8px;background:var(--card);border:1px solid var(--border);border-radius:8px}
 .postform .form-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
 .postform .form-actions .btn-primary,.postform .form-actions .btn-secondary{min-height:40px;padding:0 15px}
-@media(max-width:720px){.postform .form-grid{grid-template-columns:1fr}.postform .template-row{grid-column:auto;grid-template-columns:1fr}.postform .uploaded-link-field{grid-template-columns:1fr}.postform .form-actions{justify-content:stretch}.postform .form-actions button{flex:1}.postform .suggestion-meta{align-items:flex-start}.postform .suggestion-item{flex-direction:column;gap:4px}.postform .suggestion-date{white-space:normal}}
+@media(max-width:720px){.postform .form-grid{grid-template-columns:1fr}.postform .template-row{grid-column:auto;grid-template-columns:1fr}.postform .uploaded-link-field{grid-template-columns:1fr}.postform .form-actions{justify-content:stretch}.postform .form-actions button{flex:1}.postform .suggestion-meta{align-items:flex-start}.postform .suggestion-item{flex-direction:column;gap:4px}.postform .suggestion-date{white-space:normal}.postform .project-history-row{align-items:flex-start;flex-direction:column}.postform .project-history-details{justify-content:flex-start;text-align:left}}
