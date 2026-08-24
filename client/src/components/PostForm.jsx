@@ -1,5 +1,5 @@
 import React, {useEffect, useState, useRef} from 'react'
-import api from './api'
+import api from '../api'
 import LinkActions from './LinkActions'
 
 function toDateTimeLocal(value){
@@ -98,10 +98,11 @@ export default function PostForm({onSaved,onCancel}){
     }
   }
 
-  const applySuggestion = (data, showDropdown = true)=>{
+  const applySuggestion = (data)=>{
     const list = Array.isArray(data) ? data : [];
     setSuggestions(list);
-    setShowSuggestions(showDropdown && list.length > 0);
+    setShowSuggestions(true);
+    setSuggestionLoading(false);
     if(list.length > 0){
       setSelectedProjectPanel(list[0]);
       setPanelOpen(true);
@@ -110,7 +111,7 @@ export default function PostForm({onSaved,onCancel}){
     }
   }
 
-  const queryProjectSuggestions = (q, options = {})=>{
+  const queryProjectSuggestions = (q)=>{
     const raw = String(q || '').trim();
     const key = raw.toLowerCase();
     if(!key) {
@@ -122,23 +123,23 @@ export default function PostForm({onSaved,onCancel}){
     }
     const cached = suggestionsCache.current[key];
     if(Array.isArray(cached)){
-      applySuggestion(cached, options.showDropdown !== false);
+      applySuggestion(cached);
       return;
     }
     const requestId = ++requestSeqRef.current;
     setSuggestionLoading(true);
+    setShowSuggestions(true);
     api.get('/posts/project-suggestions', { params: { query: raw } }).then(res=>{
       if(requestId !== requestSeqRef.current) return;
       const data = Array.isArray(res.data) ? res.data : [];
       suggestionsCache.current[key] = data;
-      applySuggestion(data, options.showDropdown !== false);
+      applySuggestion(data);
     }).catch(()=>{
       if(requestId !== requestSeqRef.current) return;
       setSuggestions([]);
-      setShowSuggestions(false);
+      setShowSuggestions(true);
       setSelectedProjectPanel(null);
-    }).finally(()=>{
-      if(requestId === requestSeqRef.current) setSuggestionLoading(false);
+      setSuggestionLoading(false);
     });
   }
 
@@ -147,7 +148,7 @@ export default function PostForm({onSaved,onCancel}){
     setSelectedProjectPanel(null);
     setShowSuggestions(Boolean(String(val || '').trim()));
     if(debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(()=> queryProjectSuggestions(val), 150);
+    debounceRef.current = setTimeout(()=> queryProjectSuggestions(val), 180);
   }
 
   const selectSuggestion = (s)=>{
@@ -165,7 +166,7 @@ export default function PostForm({onSaved,onCancel}){
       setSelectedProjectPanel(cached[0]);
       setPanelOpen(true);
     } else {
-      queryProjectSuggestions(name, {showDropdown:false});
+      queryProjectSuggestions(name);
     }
   }
 
@@ -187,20 +188,24 @@ export default function PostForm({onSaved,onCancel}){
             onChange={e=>onProjectNameChange(e.target.value)}
             onFocus={e=>{ if(e.target.value.trim()) queryProjectSuggestions(e.target.value); }}
             onClick={e=>{ if(e.target.value.trim()) queryProjectSuggestions(e.target.value); }}
-            onBlur={e=>{ setTimeout(()=>maybeShowPanelForName(e.target.value), 220); }}
           />
-          {suggestionLoading && <div className="suggestion-loading">Searching projects…</div>}
-          {showSuggestions && suggestions.length>0 && (
+          {showSuggestions && (
             <div className="suggestions-dropdown">
-              {suggestions.map(s=> (
-                <button type="button" key={s.project_name} className="suggestion-item" onMouseDown={e=>e.preventDefault()} onClick={()=>selectSuggestion(s)}>
-                  <span className="suggestion-name">{s.project_name}</span>
-                  <span className="suggestion-meta">
-                    <span>{s.count} past {s.count===1?'schedule':'schedules'}</span>
-                    {s.last_scheduled_at && <span className="suggestion-date">Last: {formatSuggestedDate(s.last_scheduled_at)}</span>}
-                  </span>
-                </button>
-              ))}
+              {suggestionLoading ? (
+                <div className="suggestion-loading">Searching projects…</div>
+              ) : suggestions.length > 0 ? (
+                suggestions.map(s=> (
+                  <button type="button" key={s.project_name} className="suggestion-item" onMouseDown={e=>e.preventDefault()} onClick={()=>selectSuggestion(s)}>
+                    <span className="suggestion-name">{s.project_name}</span>
+                    <span className="suggestion-meta">
+                      <span>{s.count} past {s.count===1?'schedule':'schedules'}</span>
+                      {s.last_scheduled_at && <span className="suggestion-date">Last: {formatSuggestedDate(s.last_scheduled_at)}</span>}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="suggestion-empty">No previous project found</div>
+              )}
             </div>
           )}
         </div>
