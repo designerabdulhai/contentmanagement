@@ -41,6 +41,8 @@ export default function Settings(){
   const [templates, setTemplates] = useState([]);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
+  const [syncingSheets, setSyncingSheets] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
 
   const load = async () => {
     const r = await api.get('/settings');
@@ -75,7 +77,7 @@ export default function Settings(){
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) return setProfileMessage('Please select an image file.');
-    if (file.size > 5 * 1024 * 1024) return setProfileMessage('Image must be smaller than 5 MB.');
+    if (file.size > 5 * 1024 * 1024) return setProfileMessage('Image must be smaller than 5 MB');
     try {
       const photo = await imageToBase64(file);
       setProfile(p => ({ ...p, photo }));
@@ -89,6 +91,22 @@ export default function Settings(){
     if (!newInvite.trim()) return;
     api.post('/invite',{email:newInvite,role:'manager'}).then(()=>setNewInvite('')).catch(()=>{});
   }
+
+  const syncGoogleSheets = async () => {
+    setSyncingSheets(true);
+    setSyncMessage('Syncing all D1 data to Google Sheets…');
+    try {
+      const response = await api.post('/google-sheets/sync');
+      const data = response.data || {};
+      if (!data.ok) throw new Error(data.error || 'Google Sheets sync failed.');
+      const count = Array.isArray(data.tables) ? data.tables.length : 0;
+      setSyncMessage(`Sync completed successfully. ${count} table(s) synced.`);
+    } catch (error) {
+      setSyncMessage(`Sync failed: ${error.message || 'Unknown error'}`);
+    } finally {
+      setSyncingSheets(false);
+    }
+  };
 
   const photoSrc = profile.photo ? `data:image/jpeg;base64,${profile.photo}` : '';
 
@@ -132,6 +150,19 @@ export default function Settings(){
             <button className="btn-primary" type="submit" disabled={savingProfile}>{savingProfile ? 'Saving…' : 'Save Profile'}</button>
           </div>
         </form>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <h3>Google Sheets Sync</h3>
+            <p className="setting-help">Manually sync all current D1 data to the configured Google Sheet.</p>
+          </div>
+          <button className="btn-primary" onClick={syncGoogleSheets} disabled={syncingSheets}>
+            {syncingSheets ? 'Syncing…' : 'Sync Now'}
+          </button>
+        </div>
+        {syncMessage && <div className="setting-help" style={{marginTop: 10}}>{syncMessage}</div>}
       </div>
 
       <div className="setting-group">
