@@ -42,7 +42,7 @@ app.get('/api/posts/project-suggestions', (req, res) => {
   const q = String(req.query.query || '').trim();
   if (!q) return res.json([]);
   const rows = db.prepare(`
-    SELECT project_name, scheduled_at, channel, status FROM posts
+    SELECT project_name, scheduled_at, content_type, channel, status FROM posts
     WHERE project_name IS NOT NULL AND lower(project_name) LIKE ?
     ORDER BY scheduled_at IS NULL, scheduled_at DESC
   `).all(`%${q.toLowerCase()}%`);
@@ -61,6 +61,7 @@ app.get('/api/posts/project-suggestions', (req, res) => {
       last_scheduled_at: latest?.scheduled_at || null,
       last_scheduled_dates: item.last_scheduled.slice(0, 5).map(s => ({
         scheduled_at: s.scheduled_at,
+        content_type: s.content_type || '',
         channel: s.channel || '',
         status: s.status || ''
       }))
