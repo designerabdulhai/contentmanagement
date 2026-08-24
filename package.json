@@ -6,6 +6,9 @@
     "build": "npm --prefix client install && npm --prefix client run build",
     "init-db": "node server/init_db.js"
   },
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
     "better-sqlite3": "^8.0.0",
     "cors": "^2.8.5",
