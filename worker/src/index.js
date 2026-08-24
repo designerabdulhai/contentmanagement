@@ -1,3 +1,5 @@
+import { syncAllToGoogleSheets } from './googleSheets.js';
+
 const jsonHeaders = {
   'Content-Type': 'application/json; charset=utf-8',
   'Access-Control-Allow-Origin': '*',
@@ -149,7 +151,22 @@ async function handle(request, env) {
 }
 
 export default {
-  fetch(request, env) {
-    return handle(request, env).catch(err => json({ error: err?.message || 'internal server error' }, 500));
+  async fetch(request, env) {
+    try {
+      const response = await handle(request, env);
+
+      // Sync D1 data after successful write operations. Auth/session writes are excluded.
+      const path = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+      const isWrite = ['POST', 'PUT', 'DELETE'].includes(request.method);
+      const isAuth = path.startsWith('/api/auth/');
+      if (isWrite && !isAuth && response.status < 400) {
+        await syncAllToGoogleSheets(env);
+      }
+
+      return response;
+    } catch (err) {
+      console.error(err);
+      return json({ error: err?.message || 'internal server error' }, 500);
+    }
   },
 };
