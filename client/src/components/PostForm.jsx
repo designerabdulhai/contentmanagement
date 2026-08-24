@@ -104,6 +104,8 @@ export default function PostForm({onSaved,onCancel}){
     if(list.length > 0){
       setSelectedProjectPanel(list[0]);
       setPanelOpen(true);
+    } else {
+      setSelectedProjectPanel(null);
     }
   }
 
@@ -139,7 +141,7 @@ export default function PostForm({onSaved,onCancel}){
     setPost({...post, project_name: val});
     setSelectedProjectPanel(null);
     if(debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(()=> queryProjectSuggestions(val), 120);
+    debounceRef.current = setTimeout(()=> queryProjectSuggestions(val), 150);
   }
 
   const selectSuggestion = (s)=>{
@@ -152,9 +154,13 @@ export default function PostForm({onSaved,onCancel}){
   const maybeShowPanelForName = (name)=>{
     const key = String(name || '').trim().toLowerCase();
     if(!key) return;
-    const found = suggestionsCache.current[key] || suggestions.find(x=>x.project_name?.toLowerCase()===key);
-    if(found){ setSelectedProjectPanel(found); setPanelOpen(true); }
-    else queryProjectSuggestions(name);
+    const cached = suggestionsCache.current[key];
+    if(Array.isArray(cached) && cached.length > 0){
+      setSelectedProjectPanel(cached[0]);
+      setPanelOpen(true);
+    } else {
+      queryProjectSuggestions(name);
+    }
   }
 
   const contentTypes = Array.isArray(settings.content_types) ? settings.content_types : [];
@@ -240,16 +246,20 @@ export default function PostForm({onSaved,onCancel}){
           </div>
           {panelOpen && (
             <div className="panel-body">
-              {Array.isArray(selectedProjectPanel.last_scheduled_dates) && selectedProjectPanel.last_scheduled_dates.length > 0 ? selectedProjectPanel.last_scheduled_dates.map((row, idx)=> {
-                const value = typeof row === 'string' ? row : row?.scheduled_at;
-                return <div className="panel-row" key={idx}>
-                  <div className="panel-row-date">{typeof row === 'object' && row?.label ? row.label : formatSuggestedDate(value)}</div>
-                  <div className="panel-row-meta">
-                    {typeof row === 'object' && row?.channel ? <span>{row.channel}</span> : null}
-                    {typeof row === 'object' && row?.status ? <span className={`panel-status ${String(row.status).toLowerCase()}`}>{row.status}</span> : null}
-                  </div>
-                </div>;
-              }) : <div className="panel-row">No previous schedules found for this project.</div>}
+              {Array.isArray(selectedProjectPanel.last_scheduled_dates) && selectedProjectPanel.last_scheduled_dates.length > 0 ? (
+                selectedProjectPanel.last_scheduled_dates.map((row, idx)=> {
+                  const value = typeof row === 'string' ? row : row?.scheduled_at;
+                  return <div className="panel-row" key={idx}>
+                    <div className="panel-row-date">{typeof row === 'object' && row?.label ? row.label : formatSuggestedDate(value)}</div>
+                    <div className="panel-row-meta">
+                      {typeof row === 'object' && row?.channel ? <span>{row.channel}</span> : null}
+                      {typeof row === 'object' && row?.status ? <span className={`panel-status ${String(row.status).toLowerCase()}`}>{row.status}</span> : null}
+                    </div>
+                  </div>;
+                })
+              ) : (
+                <div className="panel-row">No previous schedules found for this project.</div>
+              )}
             </div>
           )}
         </div>
