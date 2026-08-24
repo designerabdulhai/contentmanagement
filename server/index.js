@@ -8,12 +8,12 @@ const app = express();
 const db = new Database('data.sqlite');
 const PORT = Number(process.env.PORT) || 4000;
 const MAX_BODY_SIZE = process.env.MAX_BODY_SIZE || '1mb';
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+const sessions = new Map();
 
-// Basic production hardening. Set CORS_ORIGIN to the exact frontend origin in production.
 const allowedOrigin = process.env.CORS_ORIGIN || '*';
 app.use(cors({ origin: allowedOrigin }));
 app.use(express.json({ limit: MAX_BODY_SIZE }));
-
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -27,18 +27,61 @@ const requireId = (req, res, next) => {
   next();
 };
 
+const hashPassword = (password, salt) => crypto.scryptSync(password, salt, 64).toString('hex');
+const safeEqual = (a, b) => {
+  const aa = Buffer.from(a, 'hex');
+  const bb = Buffer.from(b, 'hex');
+  return aa.length === bb.length && crypto.timingSafeEqual(aa, bb);
+};
+const getToken = (req) => {
+  const header = String(req.headers.authorization || '');
+  return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+};
+const requireAuth = (req, res, next) => {
+  const token = getToken(req);
+  const session = token && sessions.get(token);
+  if (!session || session.expiresAt <= Date.now()) {
+    if (token) sessions.delete(token);
+    return res.status(401).json({ error: 'authentication required' });
+  }
+  req.user = session.user;
+  next();
+};
+
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-app.get('/api/posts', (req, res) => {
+app.post('/api/auth/login', (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+
+  const user = db.prepare('SELECT id, display_name, email, photo, role, password_hash, password_salt FROM users WHERE lower(email)=?').get(email);
+  if (!user || !user.password_hash || !user.password_salt || !safeEqual(hashPassword(password, user.password_salt), user.password_hash)) {
+    return res.status(401).json({ error: 'invalid email or password' });
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const publicUser = { id: user.id, display_name: user.display_name, email: user.email, photo: user.photo, role: user.role };
+  sessions.set(token, { user: publicUser, expiresAt: Date.now() + SESSION_TTL_MS });
+  res.json({ token, user: publicUser });
+});
+
+app.post('/api/auth/logout', requireAuth, (req, res) => {
+  sessions.delete(getToken(req));
+  res.json({ ok: true });
+});
+
+app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: req.user }));
+
+app.get('/api/posts', requireAuth, (req, res) => {
   const rows = db.prepare(`
-    SELECT p.*, u.display_name AS owner
-    FROM posts p LEFT JOIN users u ON p.created_by = u.id
+    SELECT p.*, u.display_name AS owner FROM posts p LEFT JOIN users u ON p.created_by = u.id
     ORDER BY p.scheduled_at IS NULL, p.scheduled_at
   `).all();
   res.json(rows);
 });
 
-app.get('/api/posts/project-suggestions', (req, res) => {
+app.get('/api/posts/project-suggestions', requireAuth, (req, res) => {
   const q = String(req.query.query || '').trim();
   if (!q) return res.json([]);
   const rows = db.prepare(`
@@ -55,37 +98,24 @@ app.get('/api/posts/project-suggestions', (req, res) => {
   }
   res.json(Object.values(map).map(item => {
     const latest = item.last_scheduled[0] || null;
-    return {
-      project_name: item.project_name,
-      count: item.count,
-      last_scheduled_at: latest?.scheduled_at || null,
-      last_scheduled_dates: item.last_scheduled.slice(0, 5).map(s => ({
-        scheduled_at: s.scheduled_at,
-        content_type: s.content_type || '',
-        channel: s.channel || '',
-        status: s.status || ''
-      }))
-    };
+    return { project_name: item.project_name, count: item.count, last_scheduled_at: latest?.scheduled_at || null, last_scheduled_dates: item.last_scheduled.slice(0, 5).map(s => ({ scheduled_at: s.scheduled_at, content_type: s.content_type || '', channel: s.channel || '', status: s.status || '' })) };
   }));
 });
 
-app.post('/api/posts/bulk', (req, res) => {
+app.post('/api/posts/bulk', requireAuth, (req, res) => {
   const { project_name, content_type, channel, platform, start_date, end_date, days_of_week, occurrences } = req.body;
   if (!project_name || !start_date) return res.status(400).json({ error: 'project_name and start_date required' });
-  const start = new Date(start_date);
-  const end = end_date ? new Date(end_date) : null;
+  const start = new Date(start_date); const end = end_date ? new Date(end_date) : null;
   if (Number.isNaN(start.getTime()) || (end && Number.isNaN(end.getTime()))) return res.status(400).json({ error: 'invalid date' });
   if (end && end < start) return res.status(400).json({ error: 'end_date must be on or after start_date' });
-
   const requestedDays = Array.isArray(days_of_week) ? days_of_week.map(Number).filter(n => Number.isInteger(n) && n >= 0 && n <= 6) : [];
   const maxOccurrences = Math.min(Math.max(Number(occurrences) || 365, 1), 1000);
-  const created = [];
-  let cursor = new Date(start);
+  const created = []; let cursor = new Date(start);
   const insert = db.prepare(`INSERT INTO posts (project_name, content_type, channel, platform, status, scheduled_at, created_by) VALUES (?,?,?,?,?,?,?)`);
   db.transaction(() => {
     while ((end ? cursor <= end : created.length < maxOccurrences) && created.length < maxOccurrences) {
       if (requestedDays.length === 0 || requestedDays.includes(cursor.getDay())) {
-        const info = insert.run(project_name, content_type || null, channel || null, platform || null, 'Scheduled', cursor.toISOString(), null);
+        const info = insert.run(project_name, content_type || null, channel || null, platform || null, 'Scheduled', cursor.toISOString(), req.user.id);
         created.push(db.prepare('SELECT * FROM posts WHERE id = ?').get(info.lastInsertRowid));
       }
       cursor.setDate(cursor.getDate() + 1);
@@ -94,121 +124,93 @@ app.post('/api/posts/bulk', (req, res) => {
   res.status(201).json({ created_count: created.length, created });
 });
 
-app.get('/api/templates', (req, res) => res.json(db.prepare('SELECT * FROM templates ORDER BY created_at DESC').all()));
-
-app.post('/api/templates', (req, res) => {
-  const { name, content_type, channel, platform, project_id, created_by } = req.body;
+app.get('/api/templates', requireAuth, (req, res) => res.json(db.prepare('SELECT * FROM templates ORDER BY created_at DESC').all()));
+app.post('/api/templates', requireAuth, (req, res) => {
+  const { name, content_type, channel, platform, project_id } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  const info = db.prepare(`INSERT INTO templates (name, content_type, channel, platform, project_id, created_by) VALUES (?,?,?,?,?,?)`).run(name, content_type || null, channel || null, platform || null, project_id || null, created_by || null);
+  const info = db.prepare(`INSERT INTO templates (name, content_type, channel, platform, project_id, created_by) VALUES (?,?,?,?,?,?)`).run(name, content_type || null, channel || null, platform || null, project_id || null, req.user.id);
   res.status(201).json(db.prepare('SELECT * FROM templates WHERE id = ?').get(info.lastInsertRowid));
 });
-
-app.delete('/api/templates/:id', requireId, (req, res) => {
+app.delete('/api/templates/:id', requireAuth, requireId, (req, res) => {
   const info = db.prepare('DELETE FROM templates WHERE id = ?').run(req.params.id);
   if (!info.changes) return res.status(404).json({ error: 'template not found' });
   res.json({ ok: true });
 });
 
-app.get('/api/posts/:id/notes', requireId, (req, res) => {
-  res.json(db.prepare(`
-    SELECT pn.*, u.display_name AS user_name FROM post_notes pn
-    LEFT JOIN users u ON pn.user_id = u.id WHERE pn.post_id = ? ORDER BY pn.created_at DESC
-  `).all(req.params.id));
-});
-
-app.post('/api/posts/:id/notes', requireId, (req, res) => {
-  const post_id = Number(req.params.id);
-  const { user_id, message } = req.body;
-  if (!String(message || '').trim()) return res.status(400).json({ error: 'message required' });
+app.get('/api/posts/:id/notes', requireAuth, requireId, (req, res) => res.json(db.prepare(`SELECT pn.*, u.display_name AS user_name FROM post_notes pn LEFT JOIN users u ON pn.user_id = u.id WHERE pn.post_id = ? ORDER BY pn.created_at DESC`).all(req.params.id)));
+app.post('/api/posts/:id/notes', requireAuth, requireId, (req, res) => {
+  const post_id = Number(req.params.id), message = String(req.body?.message || '').trim();
+  if (!message) return res.status(400).json({ error: 'message required' });
   if (!db.prepare('SELECT id FROM posts WHERE id = ?').get(post_id)) return res.status(404).json({ error: 'post not found' });
-  const info = db.prepare('INSERT INTO post_notes (post_id, user_id, message) VALUES (?,?,?)').run(post_id, user_id || null, String(message).trim());
+  const info = db.prepare('INSERT INTO post_notes (post_id, user_id, message) VALUES (?,?,?)').run(post_id, req.user.id, message);
   res.status(201).json(db.prepare(`SELECT pn.*, u.display_name AS user_name FROM post_notes pn LEFT JOIN users u ON pn.user_id = u.id WHERE pn.id = ?`).get(info.lastInsertRowid));
 });
 
-app.get('/api/dashboard/due-soon', (req, res) => {
-  res.json(db.prepare(`
-    SELECT p.*, u.display_name AS owner FROM posts p LEFT JOIN users u ON p.created_by = u.id
-    WHERE p.scheduled_at IS NOT NULL AND p.scheduled_at >= datetime('now')
-      AND p.scheduled_at < datetime('now','+7 days') AND (p.status IS NULL OR p.status != 'Uploaded')
-    ORDER BY p.scheduled_at ASC LIMIT 50
-  `).all());
-});
-
-app.post('/api/overdue/check', (req, res) => {
+app.get('/api/dashboard/due-soon', requireAuth, (req, res) => res.json(db.prepare(`SELECT p.*, u.display_name AS owner FROM posts p LEFT JOIN users u ON p.created_by = u.id WHERE p.scheduled_at IS NOT NULL AND p.scheduled_at >= datetime('now') AND p.scheduled_at < datetime('now','+7 days') AND (p.status IS NULL OR p.status != 'Uploaded') ORDER BY p.scheduled_at ASC LIMIT 50`).all()));
+app.post('/api/overdue/check', requireAuth, (req, res) => {
   const info = db.prepare(`UPDATE posts SET is_overdue = CASE WHEN status = 'Scheduled' AND scheduled_at IS NOT NULL AND scheduled_at < datetime('now') THEN 1 ELSE 0 END`).run();
   res.json({ updated: info.changes });
 });
-
-app.post('/api/posts', (req, res) => {
+app.post('/api/posts', requireAuth, (req, res) => {
   const p = req.body || {};
   if (!p.project_name) return res.status(400).json({ error: 'project_name required' });
   if (p.scheduled_at && Number.isNaN(new Date(p.scheduled_at).getTime())) return res.status(400).json({ error: 'invalid scheduled_at' });
-  const info = db.prepare(`INSERT INTO posts (project_name, content_type, channel, platform, status, scheduled_at, uploaded_link, notes, created_by, recurring_rule) VALUES (?,?,?,?,?,?,?,?,?,?)`).run(p.project_name, p.content_type || null, p.channel || null, p.platform || null, p.status || 'Listed', p.scheduled_at || null, p.uploaded_link || null, p.notes || null, p.created_by || null, p.recurring_rule || null);
+  const info = db.prepare(`INSERT INTO posts (project_name, content_type, channel, platform, status, scheduled_at, uploaded_link, notes, created_by, recurring_rule) VALUES (?,?,?,?,?,?,?,?,?,?)`).run(p.project_name, p.content_type || null, p.channel || null, p.platform || null, p.status || 'Listed', p.scheduled_at || null, p.uploaded_link || null, p.notes || null, req.user.id, p.recurring_rule || null);
   const newRow = db.prepare('SELECT * FROM posts WHERE id = ?').get(info.lastInsertRowid);
-  db.prepare('INSERT INTO audit(post_id, action, payload, actor) VALUES (?,?,?,?)').run(newRow.id, 'create', JSON.stringify(newRow), p.created_by || 'system');
+  db.prepare('INSERT INTO audit(post_id, action, payload, actor) VALUES (?,?,?,?)').run(newRow.id, 'create', JSON.stringify(newRow), req.user.email);
   res.status(201).json(newRow);
 });
-
-app.put('/api/posts/:id', requireId, (req, res) => {
+app.put('/api/posts/:id', requireAuth, requireId, (req, res) => {
   const id = Number(req.params.id), p = req.body || {};
   if (p.scheduled_at && Number.isNaN(new Date(p.scheduled_at).getTime())) return res.status(400).json({ error: 'invalid scheduled_at' });
   if (!db.prepare('SELECT id FROM posts WHERE id = ?').get(id)) return res.status(404).json({ error: 'post not found' });
   db.prepare(`UPDATE posts SET project_name=?, content_type=?, channel=?, platform=?, status=?, scheduled_at=?, uploaded_link=?, notes=?, recurring_rule=?, updated_at=datetime('now') WHERE id=?`).run(p.project_name || null, p.content_type || null, p.channel || null, p.platform || null, p.status || null, p.scheduled_at || null, p.uploaded_link || null, p.notes || null, p.recurring_rule || null, id);
   const row = db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
-  db.prepare('INSERT INTO audit(post_id, action, payload, actor) VALUES (?,?,?,?)').run(id, 'update', JSON.stringify(row), p.updated_by || 'system');
+  db.prepare('INSERT INTO audit(post_id, action, payload, actor) VALUES (?,?,?,?)').run(id, 'update', JSON.stringify(row), req.user.email);
   res.json(row);
 });
-
-app.post('/api/posts/:id/duplicate', requireId, (req, res) => {
+app.post('/api/posts/:id/duplicate', requireAuth, requireId, (req, res) => {
   const id = Number(req.params.id), row = db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
   if (!row) return res.status(404).json({ error: 'post not found' });
-  const info = db.prepare(`INSERT INTO posts (project_name, content_type, channel, platform, status, scheduled_at, uploaded_link, notes, created_by, recurring_rule) VALUES (?,?,?,?,?,?,?,?,?,?)`).run(row.project_name, row.content_type, row.channel, row.platform, 'Listed', null, null, row.notes, req.body.created_by || row.created_by, row.recurring_rule);
+  const info = db.prepare(`INSERT INTO posts (project_name, content_type, channel, platform, status, scheduled_at, uploaded_link, notes, created_by, recurring_rule) VALUES (?,?,?,?,?,?,?,?,?,?)`).run(row.project_name, row.content_type, row.channel, row.platform, 'Listed', null, null, row.notes, req.user.id, row.recurring_rule);
   res.status(201).json(db.prepare('SELECT * FROM posts WHERE id = ?').get(info.lastInsertRowid));
 });
-
-app.post('/api/posts/:id/mark-uploaded', requireId, (req, res) => {
+app.post('/api/posts/:id/mark-uploaded', requireAuth, requireId, (req, res) => {
   const id = Number(req.params.id);
   if (!db.prepare('SELECT id FROM posts WHERE id = ?').get(id)) return res.status(404).json({ error: 'post not found' });
   db.prepare("UPDATE posts SET status='Uploaded', uploaded_link=?, is_overdue=0, updated_at=datetime('now') WHERE id=?").run(req.body.uploaded_link || null, id);
   res.json(db.prepare('SELECT * FROM posts WHERE id = ?').get(id));
 });
-
-app.delete('/api/posts/:id', requireId, (req, res) => {
+app.delete('/api/posts/:id', requireAuth, requireId, (req, res) => {
   const id = Number(req.params.id), row = db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
   if (!row) return res.status(404).json({ error: 'post not found' });
-  db.prepare('INSERT INTO audit(post_id, action, payload, actor) VALUES (?,?,?,?)').run(id, 'delete', JSON.stringify(row), req.body?.actor || 'system');
+  db.prepare('INSERT INTO audit(post_id, action, payload, actor) VALUES (?,?,?,?)').run(id, 'delete', JSON.stringify(row), req.user.email);
   db.prepare('DELETE FROM posts WHERE id = ?').run(id);
   res.json({ ok: true });
 });
 
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', requireAuth, (req, res) => {
   const obj = {};
   db.prepare('SELECT key, value FROM settings').all().forEach(r => { obj[r.key] = r.value.split(',').map(s => s.trim()).filter(Boolean); });
   res.json(obj);
 });
-
-app.put('/api/settings/:key', (req, res) => {
+app.put('/api/settings/:key', requireAuth, (req, res) => {
   const key = String(req.params.key || '').trim();
   if (!/^[a-z0-9_-]+$/i.test(key)) return res.status(400).json({ error: 'invalid setting key' });
   const values = Array.isArray(req.body) ? req.body.map(v => String(v).trim()).filter(Boolean) : [];
   db.prepare('INSERT OR REPLACE INTO settings(key, value) VALUES (?,?)').run(key, values.join(','));
   res.json({ key, values });
 });
-
-app.get('/api/users', (req, res) => res.json(db.prepare('SELECT * FROM users ORDER BY created_at DESC').all()));
-
-app.post('/api/invite', (req, res) => {
-  const { email, role } = req.body || {};
-  const normalizedEmail = String(email || '').trim().toLowerCase();
+app.get('/api/users', requireAuth, (req, res) => res.json(db.prepare('SELECT id, display_name, email, photo, role, created_at FROM users ORDER BY created_at DESC').all()));
+app.post('/api/invite', requireAuth, (req, res) => {
+  const normalizedEmail = String(req.body?.email || '').trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return res.status(400).json({ error: 'valid email required' });
   const token = crypto.randomBytes(32).toString('hex');
-  const info = db.prepare('INSERT INTO invites(email, role, token) VALUES (?,?,?)').run(normalizedEmail, role || 'manager', token);
+  const info = db.prepare('INSERT INTO invites(email, role, token) VALUES (?,?,?)').run(normalizedEmail, req.body?.role || 'manager', token);
   res.status(201).json(db.prepare('SELECT id, email, role, status, created_at FROM invites WHERE id = ?').get(info.lastInsertRowid));
 });
-
-app.get('/api/invites', (req, res) => res.json(db.prepare('SELECT id, email, role, status, created_at FROM invites ORDER BY created_at DESC').all()));
-
-app.get('/api/summary', (req, res) => {
+app.get('/api/invites', requireAuth, (req, res) => res.json(db.prepare('SELECT id, email, role, status, created_at FROM invites ORDER BY created_at DESC').all()));
+app.get('/api/summary', requireAuth, (req, res) => {
   const total = db.prepare('SELECT COUNT(*) AS c FROM posts').get().c;
   const scheduledWeek = db.prepare("SELECT COUNT(*) AS c FROM posts WHERE scheduled_at >= datetime('now') AND scheduled_at < datetime('now','+7 days')").get().c;
   const uploadedMonth = db.prepare("SELECT COUNT(*) AS c FROM posts WHERE status='Uploaded' AND strftime('%Y-%m', created_at)=strftime('%Y-%m','now')").get().c;
@@ -221,15 +223,11 @@ const clientDist = path.resolve(__dirname, '../client/dist');
 app.use(express.static(clientDist, { index: 'index.html' }));
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
-  res.sendFile(path.join(clientDist, 'index.html'), (err) => {
-    if (err) next(err);
-  });
+  res.sendFile(path.join(clientDist, 'index.html'), (err) => { if (err) next(err); });
 });
-
 app.use((err, req, res, next) => {
   console.error(err);
   if (res.headersSent) return next(err);
   res.status(500).json({ error: 'internal server error' });
 });
-
 app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
