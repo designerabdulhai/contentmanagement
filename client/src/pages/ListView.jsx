@@ -54,7 +54,19 @@ export default function ListView(){
     setDeleteError('');
     setDeletingPostId(id);
     try {
-      const response = await api.delete(`/posts/${id}`);
+      // Use POST for deletion because it survives proxies/environments that
+      // mishandle DELETE requests. The Worker supports this endpoint and the
+      // existing DELETE endpoint remains available as a fallback.
+      let response;
+      try {
+        response = await api.post(`/posts/${id}/delete`);
+      } catch (postError) {
+        if (postError?.response?.status === 404 || /not found/i.test(postError?.message || '')) {
+          response = await api.delete(`/posts/${id}`);
+        } else {
+          throw postError;
+        }
+      }
       if (response?.status < 200 || response?.status >= 300) {
         throw new Error(`Delete failed (${response?.status || 'unknown'})`);
       }
