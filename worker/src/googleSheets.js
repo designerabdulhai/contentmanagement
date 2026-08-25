@@ -1,51 +1,53 @@
-const GOOGLE_SHEETS_SYNC_VERSION = '2026-08-24-v6';
+const GOOGLE_SHEETS_SYNC_VERSION = '2026-08-25-v1';
 
 export async function syncAllToGoogleSheets(env) {
   const webhook = String(env.GSHEET_WEBHOOK_URL || '').trim();
   const secret = String(env.GSHEET_SYNC_SECRET || '').trim();
 
-  if (!webhook || !secret || !env.DB) {
+  if (!env.DB || !webhook || !secret) {
     return {
       ok: false,
-      error: 'Google Sheets sync is not configured',
       version: GOOGLE_SHEETS_SYNC_VERSION,
+      error: 'Google Sheets sync is not configured',
     };
   }
 
   try {
-    // Only read application tables. Cloudflare D1 may expose internal
-    // tables such as _cf_KV that are intentionally not queryable.
-    const tableRows = await env.DB.prepare(`
-      SELECT name
-      FROM sqlite_master
-      WHERE type = 'table'
-        AND name NOT LIKE 'sqlite_%'
-        AND name NOT LIKE '_cf_%'
-        AND name NOT IN ('sessions')
-      ORDER BY name
-    `).all();
+    // Do not query sqlite_master. Cloudflare D1 can expose protected
+    // internal tables such as _cf_KV, which application code cannot read.
+    const queries = {
+      posts: 'SELECT * FROM posts',
+      templates: 'SELECT * FROM templates',
+      settings: 'SELECT * FROM settings',
+      invites: 'SELECT * FROM invites',
+      audit: 'SELECT * FROM audit',
+      // Never export password_hash/password_salt.
+      users: `
+        SELECT
+          id,
+          display_name,
+          email,
+          photo,
+          role,
+          created_at
+        FROM users
+      `,
+    };
 
     const tables = {};
 
-    for (const item of tableRows.results || []) {
-      const table = String(item.name || '');
-
-      if (!/^[A-Za-z0-9_]+$/.test(table)) {
-        continue;
+    for (const [name, sql] of Object.entries(queries)) {
+      try {
+        const result = await env.DB.prepare(sql).all();
+        tables[name] = result.results || [];
+      } catch (error) {
+        // These tables are optional for older schemas.
+        if (['templates', 'settings', 'invites', 'audit'].includes(name)) {
+          console.warn(`Skipping ${name}:`, error?.message || error);
+          continue;
+        }
+        throw error;
       }
-
-      const result = await env.DB
-        .prepare(`SELECT * FROM "${table}"`)
-        .all();
-
-      let rows = result.results || [];
-
-      // Never export password hashes/salts to Google Sheets.
-      if (table === 'users') {
-        rows = rows.map(({ password_hash, password_salt, ...safe }) => safe);
-      }
-
-      tables[table] = rows;
     }
 
     const response = await fetch(webhook, {
@@ -70,7 +72,7 @@ export async function syncAllToGoogleSheets(env) {
       );
     }
 
-    let result = null;
+    let result;
     try {
       result = JSON.parse(responseText);
     } catch {
