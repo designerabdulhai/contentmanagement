@@ -1,14 +1,16 @@
 /*
- * CONTENT MANAGEMENT API
+ * Content Management API
  * Cloudflare Worker + D1
- * ES Module Worker
  *
- * Auth is stateless so it does not depend on a sessions table.
- * Existing D1 data is not reset or recreated.
+ * IMPORTANT:
+ * - ES Module Worker: export default is at the bottom.
+ * - D1 binding name must be DB.
+ * - Existing D1 data is NOT deleted, reset, migrated, or recreated.
+ * - Google Sheets sync is kept in this same file so there is no module import.
  */
 
-const WORKER_VERSION = '2026-08-25-auth-stable-v5';
-const GOOGLE_SHEETS_SYNC_VERSION = '2026-08-25-v3';
+const WORKER_VERSION = '2026-08-25-esm-stable-v6';
+const GOOGLE_SHEETS_SYNC_VERSION = '2026-08-25-v4';
 
 const CORS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -18,19 +20,21 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 };
 
-const json = (data, status = 200) =>
-  new Response(JSON.stringify(data), {
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
     status,
     headers: CORS,
   });
+}
 
-const noContent = () =>
-  new Response(null, {
+function empty() {
+  return new Response(null, {
     status: 204,
     headers: CORS,
   });
+}
 
-async function readBody(request) {
+async function readJson(request) {
   try {
     return await request.json();
   } catch {
@@ -45,9 +49,19 @@ async function sha256Hex(value) {
     'SHA-256',
     encoder.encode(String(value))
   );
+
   return [...new Uint8Array(digest)]
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+function tokenFromRequest(request) {
+  const header = String(
+    request.headers.get('Authorization') || ''
+  );
+
+  if (!header.startsWith('Bearer ')) return '';
+  return header.slice(7).trim();
 }
 
 function base64UrlEncode(value) {
@@ -61,8 +75,10 @@ function base64UrlDecode(value) {
   const normalized = String(value || '')
     .replace(/-/g, '+')
     .replace(/_/g, '/');
+
   return atob(
-    normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+    normalized +
+      '='.repeat((4 - (normalized.length % 4)) % 4)
   );
 }
 
@@ -70,13 +86,12 @@ async function passwordMatches(password, salt, storedHash) {
   const p = String(password ?? '');
   const s = String(salt ?? '').trim();
   const h = String(storedHash ?? '').trim().toLowerCase();
+
   if (!p || !h) return false;
 
-  // Preserve the existing password scheme first.
   const salted = await sha256Hex(`${p}${s}`);
   if (salted.toLowerCase() === h) return true;
 
-  // Compatibility fallback for accounts created with plain SHA-256.
   const plain = await sha256Hex(p);
   return plain.toLowerCase() === h;
 }
@@ -87,12 +102,8 @@ async function createAuthToken(user) {
   const signature = await sha256Hex(
     `${payload}.${String(user.password_hash || '')}`
   );
-  return `${base64UrlEncode(payload)}.${signature}`;
-}
 
-function tokenFromRequest(request) {
-  const auth = String(request.headers.get('Authorization') || '');
-  return auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  return `${base64UrlEncode(payload)}.${signature}`;
 }
 
 async function requireAuth(request, db) {
@@ -108,7 +119,8 @@ async function requireAuth(request, db) {
     const id = Number(idText);
     const exp = Number(expText);
 
-    if (!Number.isInteger(id) || !Number.isFinite(exp)) return null;
+    if (!Number.isInteger(id)) return null;
+    if (!Number.isFinite(exp)) return null;
     if (exp <= Math.floor(Date.now() / 1000)) return null;
 
     const user = await db
@@ -133,26 +145,13 @@ async function requireAuth(request, db) {
       `${payload}.${String(user.password_hash)}`
     );
 
-    if (expected !== parts[1]) return null;
-
-    return user;
+    return expected === parts[1] ? user : null;
   } catch {
     return null;
   }
 }
 
-function settingsObject(rows) {
-  const out = {};
-  for (const row of rows || []) {
-    out[row.key] = String(row.value || '')
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean);
-  }
-  return out;
-}
-
-async function audit(db, postId, action, payload, actor = 'system') {
+async function writeAudit(db, postId, action, payload, actor) {
   try {
     await db
       .prepare(`
@@ -160,14 +159,44 @@ async function audit(db, postId, action, payload, actor = 'system') {
         (post_id, action, payload, actor)
         VALUES (?, ?, ?, ?)
       `)
-      .bind(postId, action, JSON.stringify(payload), actor)
+      .bind(
+        postId ?? null,
+        action,
+        JSON.stringify(payload ?? null),
+        actor || 'system'
+      )
       .run();
   } catch {
-    // Audit failure must not break the primary operation.
+    // Audit must never break the primary request.
   }
 }
 
-async function syncAllToGoogleSheets(env, options = {}) {
+function normalizePath(pathname) {
+  let path = String(pathname || '/')
+    .replace(/\/+/g, '/')
+    .replace(/\/+$/, '') || '/';
+
+  if (!path.startsWith('/api')) {
+    path = `/api${path}`;
+  }
+
+  return path;
+}
+
+function settingsObject(rows) {
+  const output = {};
+
+  for (const row of rows || []) {
+    output[row.key] = String(row.value || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  return output;
+}
+
+async function syncAllToGoogleSheets(env, actor = null) {
   const webhook = String(env.GSHEET_WEBHOOK_URL || '').trim();
   const secret = String(env.GSHEET_SYNC_SECRET || '').trim();
 
@@ -179,104 +208,97 @@ async function syncAllToGoogleSheets(env, options = {}) {
     };
   }
 
-  try {
-    const queries = {
-      posts: 'SELECT * FROM posts',
-      templates: 'SELECT * FROM templates',
-      settings: 'SELECT * FROM settings',
-      invites: 'SELECT * FROM invites',
-      audit: 'SELECT * FROM audit',
-      users: `
-        SELECT id, display_name, email, photo, role, created_at
-        FROM users
-      `,
-    };
+  const queries = {
+    posts: 'SELECT * FROM posts',
+    templates: 'SELECT * FROM templates',
+    settings: 'SELECT * FROM settings',
+    invites: 'SELECT * FROM invites',
+    audit: 'SELECT * FROM audit',
+    users: `
+      SELECT
+        id,
+        display_name,
+        email,
+        photo,
+        role,
+        created_at
+      FROM users
+    `,
+  };
 
-    const tables = {};
+  const tables = {};
 
-    for (const [name, sql] of Object.entries(queries)) {
-      try {
-        const result = await env.DB.prepare(sql).all();
-        tables[name] = result.results || [];
-      } catch (error) {
-        if (['templates', 'settings', 'invites', 'audit'].includes(name)) {
-          console.warn(`Skipping ${name}:`, error?.message || error);
-          continue;
-        }
-        throw error;
-      }
-    }
-
-    const response = await fetch(webhook, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        secret,
-        tables,
-        version: GOOGLE_SHEETS_SYNC_VERSION,
-        mode: options.mode || 'manual',
-        actor: options.actor || null,
-      }),
-    });
-
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      throw new Error(
-        `Google Apps Script HTTP ${response.status}: ${responseText.slice(0, 1000)}`
-      );
-    }
-
-    let result;
+  for (const [name, sql] of Object.entries(queries)) {
     try {
-      result = JSON.parse(responseText);
-    } catch {
-      result = { raw: responseText.slice(0, 1000) };
+      const result = await env.DB.prepare(sql).all();
+      tables[name] = result.results || [];
+    } catch (error) {
+      if (['templates', 'settings', 'invites', 'audit'].includes(name)) {
+        console.warn(`Skipping ${name}:`, error?.message || error);
+        continue;
+      }
+      throw error;
     }
-
-    if (result?.ok === false) {
-      throw new Error(
-        result.error || 'Google Apps Script rejected the sync'
-      );
-    }
-
-    return {
-      ok: true,
-      version: GOOGLE_SHEETS_SYNC_VERSION,
-      tables: Object.keys(tables),
-      counts: Object.fromEntries(
-        Object.entries(tables).map(([name, rows]) => [name, rows.length])
-      ),
-      response: result,
-    };
-  } catch (error) {
-    console.error('Google Sheets sync failed:', error?.message || error);
-    return {
-      ok: false,
-      version: GOOGLE_SHEETS_SYNC_VERSION,
-      error: error?.message || String(error),
-    };
   }
-}
 
-function normalizePath(pathname) {
-  let path = pathname.replace(/\/+/g, '/').replace(/\/+$/, '') || '/';
-  // Some proxies preserve /api; some Worker preview paths may omit it.
-  if (path.startsWith('/api/')) return path;
-  if (path === '/api') return '/api';
-  return `/api${path}`;
+  const response = await fetch(webhook, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      secret,
+      tables,
+      version: GOOGLE_SHEETS_SYNC_VERSION,
+      actor,
+    }),
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(
+      `Google Apps Script HTTP ${response.status}: ${text.slice(0, 1000)}`
+    );
+  }
+
+  let result;
+
+  try {
+    result = JSON.parse(text);
+  } catch {
+    result = { raw: text.slice(0, 1000) };
+  }
+
+  if (result?.ok === false) {
+    throw new Error(
+      result.error || 'Google Apps Script rejected the sync'
+    );
+  }
+
+  return {
+    ok: true,
+    version: GOOGLE_SHEETS_SYNC_VERSION,
+    tables: Object.keys(tables),
+    counts: Object.fromEntries(
+      Object.entries(tables).map(([name, rows]) => [name, rows.length])
+    ),
+    response: result,
+  };
 }
 
 async function handle(request, env) {
-  if (request.method === 'OPTIONS') return noContent();
+  if (request.method === 'OPTIONS') {
+    return empty();
+  }
 
-  if (!env.DB) {
+  if (!env?.DB) {
     return json(
       {
         error: 'D1 binding DB is not configured',
+        worker: 'contentmanagement-api',
+        version: WORKER_VERSION,
       },
       500
     );
@@ -287,24 +309,46 @@ async function handle(request, env) {
   const method = request.method.toUpperCase();
   const db = env.DB;
 
-  // Health is public.
-  if (method === 'GET' && (path === '/api/health' || path === '/api')) {
-    return json({
-      ok: true,
-      database: 'D1',
-      worker: 'contentmanagement-api',
-      version: WORKER_VERSION,
-    });
+  // -------------------------------------------------------
+  // PUBLIC HEALTH
+  // -------------------------------------------------------
+  if (method === 'GET' && path === '/api/health') {
+    try {
+      await db.prepare('SELECT 1 AS ok').first();
+
+      return json({
+        ok: true,
+        database: 'D1',
+        worker: 'contentmanagement-api',
+        version: WORKER_VERSION,
+      });
+    } catch (error) {
+      return json(
+        {
+          ok: false,
+          database: 'D1',
+          worker: 'contentmanagement-api',
+          version: WORKER_VERSION,
+          error: error?.message || String(error),
+        },
+        500
+      );
+    }
   }
 
+  // -------------------------------------------------------
   // LOGIN
+  // -------------------------------------------------------
   if (method === 'POST' && path === '/api/auth/login') {
-    const p = await readBody(request);
-    const email = String(p.email || '').trim().toLowerCase();
-    const password = String(p.password || '');
+    const payload = await readJson(request);
+    const email = String(payload.email || '').trim().toLowerCase();
+    const password = String(payload.password || '');
 
     if (!email || !password) {
-      return json({ error: 'email and password required' }, 400);
+      return json(
+        { error: 'email and password required' },
+        400
+      );
     }
 
     const user = await db
@@ -325,7 +369,10 @@ async function handle(request, env) {
       .first();
 
     if (!user) {
-      return json({ error: 'invalid email or password' }, 401);
+      return json(
+        { error: 'invalid email or password' },
+        401
+      );
     }
 
     const valid = await passwordMatches(
@@ -335,7 +382,10 @@ async function handle(request, env) {
     );
 
     if (!valid) {
-      return json({ error: 'invalid email or password' }, 401);
+      return json(
+        { error: 'invalid email or password' },
+        401
+      );
     }
 
     const token = await createAuthToken(user);
@@ -353,10 +403,18 @@ async function handle(request, env) {
     });
   }
 
+  // -------------------------------------------------------
   // AUTH ME
+  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/auth/me') {
     const user = await requireAuth(request, db);
-    if (!user) return json({ error: 'authentication required' }, 401);
+
+    if (!user) {
+      return json(
+        { error: 'authentication required' },
+        401
+      );
+    }
 
     return json({
       user: {
@@ -369,18 +427,26 @@ async function handle(request, env) {
     });
   }
 
+  // -------------------------------------------------------
   // LOGOUT
+  // -------------------------------------------------------
   if (method === 'POST' && path === '/api/auth/logout') {
     return json({ ok: true });
   }
 
-  // Everything below login requires auth.
+  // Everything else is protected.
   const user = await requireAuth(request, db);
+
   if (!user) {
-    return json({ error: 'authentication required' }, 401);
+    return json(
+      { error: 'authentication required' },
+      401
+    );
   }
 
-  // POSTS LIST
+  // -------------------------------------------------------
+  // POSTS - LIST
+  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/posts') {
     const result = await db
       .prepare(`
@@ -388,20 +454,28 @@ async function handle(request, env) {
           p.*,
           u.display_name AS owner
         FROM posts p
-        LEFT JOIN users u ON p.created_by = u.id
-        ORDER BY p.scheduled_at IS NULL, p.scheduled_at
+        LEFT JOIN users u
+          ON p.created_by = u.id
+        ORDER BY
+          p.scheduled_at IS NULL,
+          p.scheduled_at
       `)
       .all();
 
     return json(result.results || []);
   }
 
+  // -------------------------------------------------------
   // CREATE POST
+  // -------------------------------------------------------
   if (method === 'POST' && path === '/api/posts') {
-    const p = await readBody(request);
+    const payload = await readJson(request);
 
-    if (!String(p.project_name || '').trim()) {
-      return json({ error: 'project_name required' }, 400);
+    if (!String(payload.project_name || '').trim()) {
+      return json(
+        { error: 'project_name required' },
+        400
+      );
     }
 
     const result = await db
@@ -422,16 +496,16 @@ async function handle(request, env) {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .bind(
-        p.project_name,
-        p.content_type || null,
-        p.channel || null,
-        p.platform || null,
-        p.status || 'Listed',
-        p.scheduled_at || null,
-        p.uploaded_link || null,
-        p.notes || null,
+        payload.project_name,
+        payload.content_type || null,
+        payload.channel || null,
+        payload.platform || null,
+        payload.status || 'Listed',
+        payload.scheduled_at || null,
+        payload.uploaded_link || null,
+        payload.notes || null,
         user.id,
-        p.recurring_rule || null
+        payload.recurring_rule || null
       )
       .run();
 
@@ -440,21 +514,31 @@ async function handle(request, env) {
       .bind(result.meta.last_row_id)
       .first();
 
-    await audit(db, row?.id, 'create', row, user.email);
+    await writeAudit(
+      db,
+      row?.id,
+      'create',
+      row,
+      user.email
+    );
 
     return json(row, 201);
   }
 
-  // POST DELETE aliases.
-  const deleteMatch = path.match(
+  // -------------------------------------------------------
+  // POST DELETE
+  // POST /api/posts/:id/delete
+  // POST /api/posts/:id/remove
+  // -------------------------------------------------------
+  const postDeleteMatch = path.match(
     /^\/api\/posts\/(\d+)\/(delete|remove)$/
   );
 
   if (
     method === 'POST' &&
-    deleteMatch
+    postDeleteMatch
   ) {
-    const id = Number(deleteMatch[1]);
+    const id = Number(postDeleteMatch[1]);
 
     const row = await db
       .prepare('SELECT * FROM posts WHERE id = ? LIMIT 1')
@@ -463,15 +547,12 @@ async function handle(request, env) {
 
     if (!row) {
       return json(
-        {
-          error: 'post not found',
-          id,
-        },
+        { error: 'post not found', id },
         404
       );
     }
 
-    await audit(
+    await writeAudit(
       db,
       id,
       'delete',
@@ -479,25 +560,30 @@ async function handle(request, env) {
       user.email
     );
 
-    const result = await db
+    await db
       .prepare('DELETE FROM posts WHERE id = ?')
       .bind(id)
       .run();
 
     return json({
-      ok: result.meta.changes > 0,
+      ok: true,
       deleted: true,
       id,
     });
   }
 
-  // Single post GET / PUT / DELETE.
-  const postMatch = path.match(
+  // -------------------------------------------------------
+  // SINGLE POST
+  // GET /api/posts/:id
+  // PUT /api/posts/:id
+  // DELETE /api/posts/:id
+  // -------------------------------------------------------
+  const singlePostMatch = path.match(
     /^\/api\/posts\/(\d+)$/
   );
 
-  if (postMatch) {
-    const id = Number(postMatch[1]);
+  if (singlePostMatch) {
+    const id = Number(singlePostMatch[1]);
 
     if (method === 'GET') {
       const row = await db
@@ -506,7 +592,8 @@ async function handle(request, env) {
             p.*,
             u.display_name AS owner
           FROM posts p
-          LEFT JOIN users u ON p.created_by = u.id
+          LEFT JOIN users u
+            ON p.created_by = u.id
           WHERE p.id = ?
           LIMIT 1
         `)
@@ -515,11 +602,14 @@ async function handle(request, env) {
 
       return row
         ? json(row)
-        : json({ error: 'post not found', id }, 404);
+        : json(
+            { error: 'post not found', id },
+            404
+          );
     }
 
     if (method === 'PUT') {
-      const p = await readBody(request);
+      const payload = await readJson(request);
 
       const existing = await db
         .prepare('SELECT * FROM posts WHERE id = ? LIMIT 1')
@@ -527,7 +617,10 @@ async function handle(request, env) {
         .first();
 
       if (!existing) {
-        return json({ error: 'post not found', id }, 404);
+        return json(
+          { error: 'post not found', id },
+          404
+        );
       }
 
       await db
@@ -546,15 +639,15 @@ async function handle(request, env) {
           WHERE id = ?
         `)
         .bind(
-          p.project_name ?? existing.project_name,
-          p.content_type ?? existing.content_type,
-          p.channel ?? existing.channel,
-          p.platform ?? existing.platform,
-          p.status ?? existing.status,
-          p.scheduled_at ?? existing.scheduled_at,
-          p.uploaded_link ?? existing.uploaded_link,
-          p.notes ?? existing.notes,
-          p.recurring_rule ?? existing.recurring_rule,
+          payload.project_name ?? existing.project_name,
+          payload.content_type ?? existing.content_type,
+          payload.channel ?? existing.channel,
+          payload.platform ?? existing.platform,
+          payload.status ?? existing.status,
+          payload.scheduled_at ?? existing.scheduled_at,
+          payload.uploaded_link ?? existing.uploaded_link,
+          payload.notes ?? existing.notes,
+          payload.recurring_rule ?? existing.recurring_rule,
           id
         )
         .run();
@@ -564,7 +657,13 @@ async function handle(request, env) {
         .bind(id)
         .first();
 
-      await audit(db, id, 'update', updated, user.email);
+      await writeAudit(
+        db,
+        id,
+        'update',
+        updated,
+        user.email
+      );
 
       return json(updated);
     }
@@ -576,10 +675,19 @@ async function handle(request, env) {
         .first();
 
       if (!row) {
-        return json({ error: 'post not found', id }, 404);
+        return json(
+          { error: 'post not found', id },
+          404
+        );
       }
 
-      await audit(db, id, 'delete', row, user.email);
+      await writeAudit(
+        db,
+        id,
+        'delete',
+        row,
+        user.email
+      );
 
       const result = await db
         .prepare('DELETE FROM posts WHERE id = ?')
@@ -594,7 +702,9 @@ async function handle(request, env) {
     }
   }
 
+  // -------------------------------------------------------
   // SETTINGS
+  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/settings') {
     const result = await db
       .prepare('SELECT key, value FROM settings')
@@ -603,11 +713,14 @@ async function handle(request, env) {
     return json(settingsObject(result.results || []));
   }
 
+  // -------------------------------------------------------
   // TEMPLATES
+  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/templates') {
     const result = await db
       .prepare(`
-        SELECT * FROM templates
+        SELECT *
+        FROM templates
         ORDER BY created_at DESC
       `)
       .all();
@@ -615,7 +728,9 @@ async function handle(request, env) {
     return json(result.results || []);
   }
 
+  // -------------------------------------------------------
   // USERS
+  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/users') {
     const result = await db
       .prepare(`
@@ -634,7 +749,9 @@ async function handle(request, env) {
     return json(result.results || []);
   }
 
+  // -------------------------------------------------------
   // INVITES
+  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/invites') {
     const result = await db
       .prepare(`
@@ -652,7 +769,9 @@ async function handle(request, env) {
     return json(result.results || []);
   }
 
+  // -------------------------------------------------------
   // SUMMARY
+  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/summary') {
     const [total, scheduled, uploaded, listed, overdue] =
       await db.batch([
@@ -683,49 +802,75 @@ async function handle(request, env) {
     return json({
       total: total.results?.[0]?.c || 0,
       scheduledWeek: scheduled.results?.[0]?.c || 0,
-      uploadedMonth: uploaded.results?.[0]?.c || 0,
+      uploaded: uploaded.results?.[0]?.c || 0,
       listedCount: listed.results?.[0]?.c || 0,
       overdue: overdue.results?.[0]?.c || 0,
     });
   }
 
+  // -------------------------------------------------------
   // GOOGLE SHEETS SYNC
+  // -------------------------------------------------------
   if (
     method === 'POST' &&
     path === '/api/google-sheets/sync'
   ) {
-    const result = await syncAllToGoogleSheets(env, {
-      mode: 'manual',
-      actor: user.email,
-    });
+    try {
+      const result = await syncAllToGoogleSheets(
+        env,
+        user.email
+      );
 
-    return json(
-      result,
-      result.ok ? 200 : 502
-    );
+      return json(
+        result,
+        result.ok ? 200 : 502
+      );
+    } catch (error) {
+      return json(
+        {
+          ok: false,
+          error: error?.message || String(error),
+        },
+        502
+      );
+    }
   }
 
+  // -------------------------------------------------------
+  // FALLBACK
+  // -------------------------------------------------------
   return json(
     {
       error: 'not found',
       path,
       method,
+      worker: 'contentmanagement-api',
       version: WORKER_VERSION,
     },
     404
   );
 }
 
-// REQUIRED: ES Module Worker entry point for D1.
+/* =========================================================
+   ES MODULE WORKER ENTRY POINT
+   DO NOT REMOVE THIS.
+========================================================= */
 export default {
   async fetch(request, env, ctx) {
     try {
       return await handle(request, env, ctx);
     } catch (error) {
-      console.error('Worker error:', error?.message || error);
+      console.error(
+        'Worker error:',
+        error?.message || error
+      );
+
       return json(
         {
-          error: error?.message || String(error),
+          ok: false,
+          error: 'internal server error',
+          message: error?.message || String(error),
+          worker: 'contentmanagement-api',
           version: WORKER_VERSION,
         },
         500
