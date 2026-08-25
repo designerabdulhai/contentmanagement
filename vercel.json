@@ -10,11 +10,13 @@
       "maxDuration": 30
     }
   },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/[...route].js"
-    },
+      "source": "/api/:path*",
+      "destination": "https://contentmanagement-api.rubel-bhd1.workers.dev/api/:path*"
+    }
+  ],
+  "routes": [
     {
       "handle": "filesystem"
     },
