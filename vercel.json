@@ -15,6 +15,14 @@
   },
   "routes": [
     {
+      "src": "/api/auth/login",
+      "dest": "/api/auth/login.js"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/[...route].js"
+    },
+    {
       "handle": "filesystem"
     },
     {
