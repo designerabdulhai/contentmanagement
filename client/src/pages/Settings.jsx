@@ -2,6 +2,7 @@ import React, {useEffect, useState} from 'react'
 import api from '../api'
 
 const DEFAULT_PROFILE = { name: 'Owner Name', email: '', photo: '' };
+const SETTINGS_CACHE_KEY = 'contentmanagement.settings.cache.v1';
 
 function readProfile(settings) {
   return {
@@ -9,6 +10,25 @@ function readProfile(settings) {
     email: settings.profile_email?.[0] || '',
     photo: settings.profile_photo?.[0] || '',
   };
+}
+
+function readCachedSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function cacheSettings(settings) {
+  try {
+    localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(settings));
+  } catch {
+    // Cache is only an optimization; never let it break Settings.
+  }
 }
 
 function imageToBase64(file) {
@@ -35,11 +55,12 @@ function imageToBase64(file) {
 }
 
 export default function Settings(){
-  // Do not render default/empty settings before the API response arrives.
-  // This prevents the visible flash of old/default values on every page load.
-  const [settings, setSettings] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [settingsLoading, setSettingsLoading] = useState(true);
+  // Show the last known settings immediately, then refresh from D1 in the background.
+  // This removes both the old/default flash and the long blocking loading screen.
+  const initialCachedSettings = readCachedSettings();
+  const [settings, setSettings] = useState(initialCachedSettings);
+  const [profile, setProfile] = useState(initialCachedSettings ? readProfile(initialCachedSettings) : null);
+  const [settingsLoading, setSettingsLoading] = useState(!initialCachedSettings);
   const [settingsError, setSettingsError] = useState('');
   const [newInvite, setNewInvite] = useState('');
   const [templates, setTemplates] = useState([]);
@@ -49,15 +70,15 @@ export default function Settings(){
   const [syncMessage, setSyncMessage] = useState('');
 
   const load = async () => {
-    setSettingsLoading(true);
     setSettingsError('');
     try {
       const r = await api.get('/settings');
       const data = r?.data || {};
+      cacheSettings(data);
       setSettings(data);
       setProfile(readProfile(data));
     } catch (error) {
-      setSettingsError(error?.message || 'Could not load settings.');
+      if (!settings) setSettingsError(error?.message || 'Could not load settings.');
     } finally {
       setSettingsLoading(false);
     }
@@ -121,7 +142,7 @@ export default function Settings(){
     }
   };
 
-  if (settingsLoading || !settings || !profile) {
+  if (!settings || !profile) {
     return (
       <div className="page settings">
         <h2>Settings</h2>
@@ -133,24 +154,20 @@ export default function Settings(){
     );
   }
 
-  if (settingsError) {
-    return (
-      <div className="page settings">
-        <h2>Settings</h2>
-        <div className="card">
-          <h3>Could not load settings</h3>
-          <p className="setting-help">{settingsError}</p>
-          <button className="btn-primary" type="button" onClick={load}>Retry</button>
-        </div>
-      </div>
-    );
-  }
-
   const photoSrc = profile.photo ? `data:image/jpeg;base64,${profile.photo}` : '';
 
   return (
     <div className="page settings">
       <h2>Settings</h2>
+
+      {settingsLoading && <div className="setting-help" style={{marginBottom: 10}}>Refreshing saved settings…</div>}
+
+      {settingsError && (
+        <div className="card">
+          <p className="setting-help">Could not refresh settings: {settingsError}</p>
+          <button className="btn-primary" type="button" onClick={load}>Retry</button>
+        </div>
+      )}
 
       <div className="card profile-settings">
         <div className="card-header">
