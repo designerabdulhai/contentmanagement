@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-
-const API_BASE = 'https://contentmanagement-api.rubel-bhd1.workers.dev/api';
-const TOKEN_KEY = 'content_schedule_auth_token';
+import api, { TOKEN_KEY } from '../api';
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState('');
@@ -16,33 +14,15 @@ export default function Login({ onLogin }) {
     setLoading(true);
 
     try {
-      // Send JSON as text/plain to avoid an unnecessary CORS preflight.
-      // The Worker reads the body as JSON regardless of content type.
-      const response = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=UTF-8',
-        },
-        body: JSON.stringify({ email, password }),
+      // Use the Vercel same-origin /api proxy configured in api.js.
+      // This avoids browser -> Cloudflare CORS/network failures.
+      const { data } = await api.post('/auth/login', {
+        email,
+        password,
       });
 
-      const text = await response.text();
-      let data = {};
-
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        data = { error: text || 'Invalid server response' };
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || `Login failed (${response.status})`
-        );
-      }
-
-      if (!data.token || !data.user) {
-        throw new Error('Invalid login response from Cloudflare API');
+      if (!data?.token || !data?.user) {
+        throw new Error('Invalid login response from API');
       }
 
       localStorage.setItem(TOKEN_KEY, data.token);
@@ -50,7 +30,7 @@ export default function Login({ onLogin }) {
     } catch (err) {
       setError(
         err?.message ||
-          'Unable to reach Cloudflare API. Please try again.'
+          'Unable to sign in. Please try again.'
       );
     } finally {
       setLoading(false);
