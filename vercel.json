@@ -3,26 +3,5 @@
   "installCommand": "npm --prefix client install",
   "buildCommand": "npm --prefix client run build",
   "outputDirectory": "client/dist",
-  "framework": "vite",
-  "cleanUrls": true,
-  "functions": {
-    "api/[...route].js": {
-      "maxDuration": 30
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://contentmanagement-api.rubel-bhd1.workers.dev/api/:path*"
-    }
-  ],
-  "routes": [
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ]
+  "framework": "vite"
 }
