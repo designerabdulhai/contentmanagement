@@ -35,8 +35,12 @@ function imageToBase64(file) {
 }
 
 export default function Settings(){
-  const [settings, setSettings] = useState({});
-  const [profile, setProfile] = useState(DEFAULT_PROFILE);
+  // Do not render default/empty settings before the API response arrives.
+  // This prevents the visible flash of old/default values on every page load.
+  const [settings, setSettings] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState('');
   const [newInvite, setNewInvite] = useState('');
   const [templates, setTemplates] = useState([]);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -45,19 +49,28 @@ export default function Settings(){
   const [syncMessage, setSyncMessage] = useState('');
 
   const load = async () => {
-    const r = await api.get('/settings');
-    setSettings(r.data);
-    setProfile(readProfile(r.data));
+    setSettingsLoading(true);
+    setSettingsError('');
+    try {
+      const r = await api.get('/settings');
+      const data = r?.data || {};
+      setSettings(data);
+      setProfile(readProfile(data));
+    } catch (error) {
+      setSettingsError(error?.message || 'Could not load settings.');
+    } finally {
+      setSettingsLoading(false);
+    }
   };
 
-  useEffect(()=>{ load().catch(()=>{}); },[])
+  useEffect(()=>{ load(); },[])
   useEffect(()=>{ api.get('/templates').then(r=>setTemplates(r.data)).catch(()=>{}); },[])
 
   const save = (key, values)=> api.put('/settings/'+key, values).then(()=>load());
 
   const saveProfile = async (e) => {
     e.preventDefault();
-    if (!profile.name.trim()) return setProfileMessage('Please enter your name.');
+    if (!profile?.name?.trim()) return setProfileMessage('Please enter your name.');
     setSavingProfile(true);
     setProfileMessage('');
     try {
@@ -107,6 +120,31 @@ export default function Settings(){
       setSyncingSheets(false);
     }
   };
+
+  if (settingsLoading || !settings || !profile) {
+    return (
+      <div className="page settings">
+        <h2>Settings</h2>
+        <div className="card settings-loading-state">
+          <h3>Loading settings…</h3>
+          <p className="setting-help">Loading your saved settings.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (settingsError) {
+    return (
+      <div className="page settings">
+        <h2>Settings</h2>
+        <div className="card">
+          <h3>Could not load settings</h3>
+          <p className="setting-help">{settingsError}</p>
+          <button className="btn-primary" type="button" onClick={load}>Retry</button>
+        </div>
+      </div>
+    );
+  }
 
   const photoSrc = profile.photo ? `data:image/jpeg;base64,${profile.photo}` : '';
 
@@ -167,15 +205,15 @@ export default function Settings(){
 
       <div className="setting-group">
         <label>Content Types (comma separated)</label>
-        <input defaultValue={(settings.content_types||[]).join(', ')} onBlur={e=>save('content_types', e.target.value.split(',').map(s=>s.trim()))} />
+        <input value={(settings.content_types||[]).join(', ')} onChange={e=>setSettings(s=>({...s,content_types:e.target.value.split(',').map(v=>v.trim())}))} onBlur={e=>save('content_types', e.target.value.split(',').map(s=>s.trim()))} />
       </div>
       <div className="setting-group">
         <label>Channels</label>
-        <input defaultValue={(settings.channels||[]).join(', ')} onBlur={e=>save('channels', e.target.value.split(',').map(s=>s.trim()))} />
+        <input value={(settings.channels||[]).join(', ')} onChange={e=>setSettings(s=>({...s,channels:e.target.value.split(',').map(v=>v.trim())}))} onBlur={e=>save('channels', e.target.value.split(',').map(s=>s.trim()))} />
       </div>
       <div className="setting-group">
         <label>Platforms</label>
-        <input defaultValue={(settings.platforms||[]).join(', ')} onBlur={e=>save('platforms', e.target.value.split(',').map(s=>s.trim()))} />
+        <input value={(settings.platforms||[]).join(', ')} onChange={e=>setSettings(s=>({...s,platforms:e.target.value.split(',').map(v=>v.trim())}))} onBlur={e=>save('platforms', e.target.value.split(',').map(s=>s.trim()))} />
       </div>
       <div className="invite">
         <h3>Invite Manager</h3>
