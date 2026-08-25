@@ -7,10 +7,6 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://contentmanagement-api.rubel-bhd1.workers.dev/api/:path*"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
