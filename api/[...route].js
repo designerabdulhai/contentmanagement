@@ -1,16 +1,41 @@
 const WORKER_URL = 'https://contentmanagement-api.rubel-bhd1.workers.dev';
 
-export default async function handler(req, res) {
-  const route = Array.isArray(req.query?.route)
-    ? req.query.route.join('/')
-    : String(req.query?.route || '');
+function getRoute(req) {
+  const raw = req.query?.route;
 
-  const target = `${WORKER_URL}/api/${route}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`;
+  if (Array.isArray(raw)) {
+    return raw.filter(Boolean).join('/');
+  }
+
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw.replace(/^\/+|\/+$/g, '');
+  }
+
+  const url = String(req.url || '');
+  const match = url.match(/^\/api\/(.*?)(?:\?.*)?$/);
+
+  return match?.[1]
+    ? decodeURIComponent(match[1]).replace(/^\/+|\/+$/g, '')
+    : '';
+}
+
+export default async function handler(req, res) {
+  const route = getRoute(req);
+  const queryIndex = String(req.url || '').indexOf('?');
+  const query = queryIndex >= 0
+    ? String(req.url).slice(queryIndex)
+    : '';
+
+  const target = `${WORKER_URL}/api/${route}${query}`;
 
   try {
     const headers = {
-      'Content-Type': req.headers['content-type'] || 'application/json',
+      Accept: req.headers.accept || 'application/json',
     };
+
+    if (req.headers['content-type']) {
+      headers['Content-Type'] = req.headers['content-type'];
+    }
 
     if (req.headers.authorization) {
       headers.Authorization = req.headers.authorization;
@@ -19,6 +44,7 @@ export default async function handler(req, res) {
     const init = {
       method: req.method,
       headers,
+      redirect: 'follow',
     };
 
     if (!['GET', 'HEAD'].includes(req.method)) {
@@ -27,16 +53,15 @@ export default async function handler(req, res) {
         : JSON.stringify(req.body ?? {});
     }
 
-    const response = await fetch(target, init);
-    const text = await response.text();
+    const upstream = await fetch(target, init);
+    const text = await upstream.text();
 
-    res.status(response.status);
+    res.status(upstream.status);
     res.setHeader(
       'Content-Type',
-      response.headers.get('content-type') || 'application/json; charset=utf-8'
+      upstream.headers.get('content-type') || 'application/json; charset=utf-8'
     );
     res.setHeader('Cache-Control', 'no-store');
-
     res.send(text);
   } catch (error) {
     console.error('API proxy error:', error);
