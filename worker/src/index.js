@@ -1,6 +1,6 @@
 import { syncAllToGoogleSheets } from './googleSheets.js';
 
-const jsonHeaders = {
+const CORS = {
   'Content-Type': 'application/json; charset=utf-8',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
@@ -8,8 +8,9 @@ const jsonHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
-const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: jsonHeaders });
-const noContent = () => new Response(null, { status: 204, headers: jsonHeaders });
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data), { status, headers: CORS });
+const noContent = () => new Response(null, { status: 204, headers: CORS });
 async function body(request) { try { return await request.json(); } catch { return {}; } }
 const encoder = new TextEncoder();
 async function sha256Hex(value) { const digest = await crypto.subtle.digest('SHA-256', encoder.encode(String(value))); return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join(''); }
@@ -22,12 +23,7 @@ async function passwordMatches(password, salt, storedHash) {
   const s = String(salt ?? '').trim();
   const h = String(storedHash ?? '').trim().toLowerCase();
   if (!p || !h) return false;
-  const candidates = [
-    await sha256Hex(p + s),
-    await sha256Hex(p),
-    await sha256Hex(s + p),
-  ];
-  return candidates.includes(h);
+  return (await sha256Hex(p + s)).toLowerCase() === h;
 }
 
 async function createAuthToken(user) {
