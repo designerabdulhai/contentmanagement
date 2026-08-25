@@ -1,5 +1,6 @@
 import { syncAllToGoogleSheets } from './googleSheets.js';
 
+const WORKER_VERSION = '2026-08-25-delete-route-v2';
 const CORS = {
   'Content-Type': 'application/json; charset=utf-8',
   'Access-Control-Allow-Origin': '*',
@@ -29,8 +30,8 @@ async function handle(request, env) {
   const method = request.method;
   const db = env.DB;
 
-  if (method === 'GET' && path === '/') return json({ ok:true, service:'contentmanagement-api', database:'D1' });
-  if (method === 'GET' && path === '/api/health') return json({ ok:true, database:'D1', worker:'contentmanagement-api' });
+  if (method === 'GET' && path === '/') return json({ ok:true, service:'contentmanagement-api', database:'D1', version:WORKER_VERSION });
+  if (method === 'GET' && path === '/api/health') return json({ ok:true, database:'D1', worker:'contentmanagement-api', version:WORKER_VERSION, deleteRoutes:['/api/posts/:id/delete','/api/posts/:id','/posts/:id/delete','/posts/:id'] });
 
   if (method === 'POST' && path === '/api/auth/login') {
     const p = await body(request);
@@ -73,33 +74,33 @@ async function handle(request, env) {
     return json(row, 201);
   }
 
-  const postDeleteMatch = path.match(/^\/api\/posts\/(\d+)\/(?:delete|remove)$/);
-  const postMatch = path.match(/^\/api\/posts\/(\d+)$/);
-  if (postDeleteMatch || postMatch) {
+  // Accept both the normal /api/posts/:id form and paths where an upstream
+  // proxy has stripped the /api prefix. This makes deletion resilient to
+  // Vercel/Worker path rewrites without changing the D1 schema.
+  const postActionMatch = path.match(/(?:^|\/)posts\/(\d+)(?:\/(delete|remove))?$/);
+  if (postActionMatch) {
+    const id = Number(postActionMatch[1]);
+    const action = postActionMatch[2] || '';
     const user = await requireAuth(request, db);
     if (!user) return json({ error:'authentication required' }, 401);
-    const id = Number((postDeleteMatch || postMatch)[1]);
 
-    if (postDeleteMatch && method === 'POST') {
+    const isDelete = Boolean(action) || method === 'DELETE';
+    if (isDelete && (method === 'POST' || method === 'DELETE')) {
       const existing = await db.prepare('SELECT id FROM posts WHERE id=?').bind(id).first();
-      if (!existing) return json({ error:'post not found', id }, 404);
+      if (!existing) return json({ error:'post not found', id, path, method }, 404);
       await db.prepare('DELETE FROM posts WHERE id=?').bind(id).run();
-      return json({ ok:true, id, deleted:true });
+      return json({ ok:true, id, deleted:true, path, method });
     }
-    if (postMatch && method === 'DELETE') {
-      const existing = await db.prepare('SELECT id FROM posts WHERE id=?').bind(id).first();
-      if (!existing) return json({ error:'post not found', id }, 404);
-      await db.prepare('DELETE FROM posts WHERE id=?').bind(id).run();
-      return json({ ok:true, id, deleted:true });
-    }
-    if (postMatch && method === 'GET') {
+
+    if (!action && method === 'GET') {
       const row = await db.prepare('SELECT p.*,u.display_name AS owner FROM posts p LEFT JOIN users u ON p.created_by=u.id WHERE p.id=?').bind(id).first();
-      return row ? json(row) : json({error:'post not found'},404);
+      return row ? json(row) : json({error:'post not found', id},404);
     }
-    if (postMatch && method === 'PUT') {
+
+    if (!action && method === 'PUT') {
       const p = await body(request);
       const existing = await db.prepare('SELECT * FROM posts WHERE id=?').bind(id).first();
-      if (!existing) return json({error:'post not found'},404);
+      if (!existing) return json({error:'post not found', id},404);
       await db.prepare(`UPDATE posts SET project_name=?,content_type=?,channel=?,platform=?,status=?,scheduled_at=?,uploaded_link=?,notes=?,recurring_rule=?,updated_at=datetime('now') WHERE id=?`).bind(p.project_name ?? existing.project_name,p.content_type ?? existing.content_type,p.channel ?? existing.channel,p.platform ?? existing.platform,p.status ?? existing.status,p.scheduled_at ?? existing.scheduled_at,p.uploaded_link ?? existing.uploaded_link,p.notes ?? existing.notes,p.recurring_rule ?? existing.recurring_rule,id).run();
       return json(await db.prepare('SELECT * FROM posts WHERE id=?').bind(id).first());
     }
@@ -129,8 +130,7 @@ async function handle(request, env) {
 export default {
   async fetch(request, env) {
     try {
-      const response = await handle(request, env);
-      return response;
+      return await handle(request, env);
     } catch (error) {
       console.error('Worker error:', error?.message || error);
       return json({ error:error?.message || String(error) }, 500);
