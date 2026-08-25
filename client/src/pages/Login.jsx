@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import api from '../api';
+
+const API_BASE = 'https://contentmanagement-api.rubel-bhd1.workers.dev/api';
+const TOKEN_KEY = 'content_schedule_auth_token';
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState('');
@@ -12,12 +14,44 @@ export default function Login({ onLogin }) {
     e.preventDefault();
     setError('');
     setLoading(true);
+
     try {
-      const { data } = await api.post('/auth/login', { email, password });
-      localStorage.setItem('content_schedule_auth_token', data.token);
+      // Send JSON as text/plain to avoid an unnecessary CORS preflight.
+      // The Worker reads the body as JSON regardless of content type.
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=UTF-8',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const text = await response.text();
+      let data = {};
+
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { error: text || 'Invalid server response' };
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || `Login failed (${response.status})`
+        );
+      }
+
+      if (!data.token || !data.user) {
+        throw new Error('Invalid login response from Cloudflare API');
+      }
+
+      localStorage.setItem(TOKEN_KEY, data.token);
       onLogin(data.user);
     } catch (err) {
-      setError(err.message || 'Unable to sign in');
+      setError(
+        err?.message ||
+          'Unable to reach Cloudflare API. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -59,15 +93,28 @@ export default function Login({ onLogin }) {
                 autoComplete="current-password"
                 required
               />
-              <button type="button" className="password-toggle" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
                 {showPassword ? 'Hide' : 'Show'}
               </button>
             </div>
           </label>
 
-          {error && <div className="login-error" role="alert">{error}</div>}
+          {error && (
+            <div className="login-error" role="alert">
+              {error}
+            </div>
+          )}
 
-          <button className="login-submit" type="submit" disabled={loading}>
+          <button
+            className="login-submit"
+            type="submit"
+            disabled={loading}
+          >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
