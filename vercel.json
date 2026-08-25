@@ -5,6 +5,11 @@
   "outputDirectory": "client/dist",
   "framework": "vite",
   "cleanUrls": true,
+  "functions": {
+    "api/[...route].js": {
+      "maxDuration": 30
+    }
+  },
   "routes": [
     {
       "src": "/api/(.*)",
