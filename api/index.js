@@ -1,12 +1,6 @@
 const WORKER_URL = 'https://contentmanagement-api.rubel-bhd1.workers.dev';
 
 function getRoute(req) {
-  const rawUrl = String(req.url || '');
-  const match = rawUrl.match(/\/api\/(.*?)(?:\?.*)?$/);
-  if (match?.[1]) {
-    return decodeURIComponent(match[1]).replace(/^\/+|\/+$/g, '');
-  }
-
   const rawRoute = req.query?.route;
   if (Array.isArray(rawRoute) && rawRoute.length) {
     return rawRoute.filter(Boolean).join('/').replace(/^\/+|\/+$/g, '');
@@ -15,7 +9,21 @@ function getRoute(req) {
     return rawRoute.replace(/^\/+|\/+$/g, '');
   }
 
+  const rawUrl = String(req.url || '');
+  const match = rawUrl.match(/\/api\/(.*?)(?:\?.*)?$/);
+  if (match?.[1]) {
+    return decodeURIComponent(match[1]).replace(/^\/+|\/+$/g, '');
+  }
+
   return '';
+}
+
+function readBody(req) {
+  if (req.body == null) return {};
+  if (typeof req.body === 'string') {
+    try { return JSON.parse(req.body); } catch { return req.body; }
+  }
+  return req.body;
 }
 
 export default async function handler(req, res) {
@@ -41,6 +49,7 @@ export default async function handler(req, res) {
       headers['Content-Type'] = req.headers['content-type'];
     }
 
+    // Preserve the user's auth token for protected D1 routes.
     if (req.headers.authorization) {
       headers.Authorization = req.headers.authorization;
     }
@@ -51,10 +60,13 @@ export default async function handler(req, res) {
       redirect: 'follow',
     };
 
+    // Vercel may expose body as an object. Always serialize JSON for
+    // write requests, including DELETE, so the upstream request is valid.
     if (!['GET', 'HEAD'].includes(req.method)) {
-      init.body = typeof req.body === 'string'
-        ? req.body
-        : JSON.stringify(req.body ?? {});
+      const body = readBody(req);
+      if (body !== undefined && body !== null && body !== '') {
+        init.body = typeof body === 'string' ? body : JSON.stringify(body);
+      }
     }
 
     const upstream = await fetch(target, init);
@@ -66,7 +78,7 @@ export default async function handler(req, res) {
       upstream.headers.get('content-type') || 'application/json; charset=utf-8'
     );
     res.setHeader('Cache-Control', 'no-store');
-    return res.send(text);
+    return res.end(text);
   } catch (error) {
     console.error('API proxy error:', error);
     return res.status(502).json({
