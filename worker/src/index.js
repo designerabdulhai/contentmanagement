@@ -130,6 +130,15 @@ async function handle(request, env) {
     return json(row, 201);
   }
 
+  const deletePostMatch = path.match(/^\/api\/posts\/(\d+)\/delete$/);
+  if (deletePostMatch && method === 'POST') {
+    const id = Number(deletePostMatch[1]);
+    const existing = await db.prepare('SELECT id FROM posts WHERE id=?').bind(id).first();
+    if (!existing) return json({ error:'post not found', id }, 404);
+    await db.prepare('DELETE FROM posts WHERE id=?').bind(id).run();
+    return json({ ok:true, id, deleted:true });
+  }
+
   const postMatch = path.match(/^\/api\/posts\/(\d+)$/);
   if (postMatch) {
     const id = Number(postMatch[1]);
@@ -148,7 +157,7 @@ async function handle(request, env) {
       const existing = await db.prepare('SELECT id FROM posts WHERE id=?').bind(id).first();
       if (!existing) return json({error:'post not found'},404);
       await db.prepare('DELETE FROM posts WHERE id=?').bind(id).run();
-      return json({ok:true,id});
+      return json({ok:true,id,deleted:true});
     }
   }
 
