@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const baseURL = 'https://contentmanagement-api.rubel-bhd1.workers.dev/api';
+// Use the same-origin Vercel proxy so all HTTP methods (including DELETE)
+// work consistently without browser CORS/preflight issues.
+const baseURL = '/api';
 const TOKEN_KEY = 'content_schedule_auth_token';
 
 const api = axios.create({
