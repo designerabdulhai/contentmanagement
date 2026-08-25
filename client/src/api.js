@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // Normal API traffic stays on the same-origin Vercel proxy.
-// Post deletion is routed directly to the live Cloudflare Worker because
-// the Vercel rewrite layer was returning `not found` for the delete action.
+// Post deletion is routed directly to the live Cloudflare Worker so the
+// delete action does not depend on the Vercel rewrite layer.
 const baseURL = '/api';
 const WORKER_URL = 'https://contentmanagement-api.rubel-bhd1.workers.dev';
 const TOKEN_KEY = 'content_schedule_auth_token';
@@ -22,17 +22,16 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // The live Worker already supports DELETE /api/posts/:id. Bypass only
-  // the problematic Vercel rewrite for the delete button; all other API
-  // requests continue to use the existing same-origin proxy.
+  // IMPORTANT: the Worker exposes the stable delete endpoint as
+  // POST /api/posts/:id/delete. Do not convert it to DELETE here.
+  // Calling the Worker directly also avoids the Vercel rewrite losing the
+  // dynamic /posts/:id/delete route.
   const url = String(config.url || '');
   const deleteMatch = url.match(/^\/posts\/(\d+)\/delete$/);
   if (config.method?.toLowerCase() === 'post' && deleteMatch) {
     config.baseURL = WORKER_URL;
-    config.method = 'delete';
-    config.url = `/api/posts/${deleteMatch[1]}`;
-    delete config.data;
-    if (config.headers) delete config.headers['Content-Type'];
+    config.method = 'post';
+    config.url = `/api/posts/${deleteMatch[1]}/delete`;
   }
 
   return config;
