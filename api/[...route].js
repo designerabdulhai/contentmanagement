@@ -1,19 +1,19 @@
 const WORKER_URL = 'https://contentmanagement-api.rubel-bhd1.workers.dev';
 
 function getRoute(req) {
+  const url = String(req.url || '');
+
+  // Vercel catch-all query param is normally provided as req.query.route.
+  // Prefer it, but fall back to the original request URL when absent.
   const raw = req.query?.route;
-
-  if (Array.isArray(raw)) {
-    return raw.filter(Boolean).join('/');
+  if (Array.isArray(raw) && raw.length) {
+    return raw.filter(Boolean).join('/').replace(/^\/+|\/+$/g, '');
   }
-
   if (typeof raw === 'string' && raw.trim()) {
     return raw.replace(/^\/+|\/+$/g, '');
   }
 
-  const url = String(req.url || '');
-  const match = url.match(/^\/api\/(.*?)(?:\?.*)?$/);
-
+  const match = url.match(/\/api\/(.*?)(?:\?.*)?$/);
   return match?.[1]
     ? decodeURIComponent(match[1]).replace(/^\/+|\/+$/g, '')
     : '';
@@ -21,11 +21,9 @@ function getRoute(req) {
 
 export default async function handler(req, res) {
   const route = getRoute(req);
-  const queryIndex = String(req.url || '').indexOf('?');
-  const query = queryIndex >= 0
-    ? String(req.url).slice(queryIndex)
-    : '';
-
+  const rawUrl = String(req.url || '');
+  const queryIndex = rawUrl.indexOf('?');
+  const query = queryIndex >= 0 ? rawUrl.slice(queryIndex) : '';
   const target = `${WORKER_URL}/api/${route}${query}`;
 
   try {
@@ -37,6 +35,7 @@ export default async function handler(req, res) {
       headers['Content-Type'] = req.headers['content-type'];
     }
 
+    // Preserve the logged-in user's bearer token.
     if (req.headers.authorization) {
       headers.Authorization = req.headers.authorization;
     }
@@ -65,7 +64,6 @@ export default async function handler(req, res) {
     res.send(text);
   } catch (error) {
     console.error('API proxy error:', error);
-
     res.status(502).json({
       error: {
         code: '502',
