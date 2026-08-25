@@ -22,6 +22,8 @@ export default function ListView(){
   const [filters, setFilters] = useState({search:'', channel:'', content_type:'', status:''});
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(null);
+  const [deletingPostId, setDeletingPostId] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
   const [groupByDate, setGroupByDate] = useState(true);
 
   useEffect(()=>{
@@ -46,7 +48,24 @@ export default function ListView(){
   const currentUserId = 1;
   const [myPostsOnly, setMyPostsOnly] = useState(localStorage.getItem('my_posts')==='1');
   const load = ()=> api.get('/posts').then(r=> setPosts(Array.isArray(r.data)?r.data:[])).catch(()=>setPosts([]));
-  const deletePost = (id)=>{ api.delete('/posts/'+id).then(()=>load()).catch(()=>{}); }
+
+  const deletePost = async (id)=>{
+    if (!id || deletingPostId) return;
+    setDeleteError('');
+    setDeletingPostId(id);
+    try {
+      const response = await api.delete(`/posts/${id}`);
+      if (response?.status < 200 || response?.status >= 300) {
+        throw new Error(`Delete failed (${response?.status || 'unknown'})`);
+      }
+      setPosts(current => current.filter(post => Number(post.id) !== Number(id)));
+    } catch (error) {
+      setDeleteError(error?.message || 'Unable to delete post');
+      await load();
+    } finally {
+      setDeletingPostId(null);
+    }
+  };
 
   const filteredPosts = useMemo(()=>posts.filter(p=>
     (!filters.search || (p.project_name||'').toLowerCase().includes(filters.search.toLowerCase())) &&
@@ -80,6 +99,20 @@ export default function ListView(){
     finally{ setUpdatingStatus(null); }
   };
 
+  const actionButtons = (p) => (
+    <td className="actions">
+      <button type="button" title="Edit" onClick={()=>window.dispatchEvent(new CustomEvent('editPost',{detail:p}))}>✏️</button>
+      <button type="button" title="Duplicate" onClick={()=>api.post('/posts/'+p.id+'/duplicate').then(()=>load()).catch(()=>{})}>⎘</button>
+      <button
+        type="button"
+        title="Delete"
+        aria-label={`Delete ${p.project_name || 'post'}`}
+        disabled={deletingPostId===p.id || deletingPostId!==null}
+        onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); deletePost(p.id); }}
+      >{deletingPostId===p.id ? '…' : '🗑️'}</button>
+    </td>
+  );
+
   return (
     <div className="page listview">
       <div className="list-header">
@@ -97,6 +130,8 @@ export default function ListView(){
           </button>
         </div>
       </div>
+
+      {deleteError && <div className="card" style={{marginBottom:12,padding:'10px 14px',color:'#b42318',background:'#fff1f0'}}>{deleteError}</div>}
 
       {groupByDate ? (
         <div className="date-groups">
@@ -126,11 +161,7 @@ export default function ListView(){
                         <td>{formatTime(p.scheduled_at)}</td>
                         <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link} /></div></td>
                         <td>{p.owner}</td>
-                        <td className="actions">
-                          <button type="button" title="Edit" onClick={()=>window.dispatchEvent(new CustomEvent('editPost',{detail:p}))}>✏️</button>
-                          <button type="button" title="Duplicate" onClick={()=>api.post('/posts/'+p.id+'/duplicate').then(()=>load()).catch(()=>{})}>⎘</button>
-                          <button type="button" title="Delete" onClick={()=>deletePost(p.id)}>🗑️</button>
-                        </td>
+                        {actionButtons(p)}
                       </tr>
                     ))}
                   </tbody>
@@ -152,7 +183,7 @@ export default function ListView(){
                   <td>{p.scheduled_at}</td>
                   <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link} /></div></td>
                   <td>{p.owner}</td>
-                  <td className="actions"><button type="button" title="Edit" onClick={()=>window.dispatchEvent(new CustomEvent('editPost',{detail:p}))}>✏️</button><button type="button" title="Duplicate" onClick={()=>api.post('/posts/'+p.id+'/duplicate').then(()=>load()).catch(()=>{})}>⎘</button><button type="button" title="Delete" onClick={()=>deletePost(p.id)}>🗑️</button></td>
+                  {actionButtons(p)}
                 </tr>
               ))}
             </tbody>
