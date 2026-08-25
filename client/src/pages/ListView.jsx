@@ -91,7 +91,7 @@ export default function ListView(){
     return Object.entries(map).sort((a,b)=>{
       if(a[0]==='No date') return 1;
       if(b[0]==='No date') return -1;
-      return new Date(a[1][0]?.scheduled_at||0)-new Date(b[1][0]?.scheduled_at||0);
+      return new Date(b[1][0]?.scheduled_at||0)-new Date(a[1][0]?.scheduled_at||0);
     });
   },[filteredPosts]);
 
