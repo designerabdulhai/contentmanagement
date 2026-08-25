@@ -16,10 +16,23 @@ function formatTime(value){
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
 }
+function startOfWeek(date){
+  const d = new Date(date);
+  d.setHours(0,0,0,0);
+  const day = d.getDay();
+  d.setDate(d.getDate() - day);
+  return d;
+}
+function startOfMonth(date){
+  const d = new Date(date);
+  d.setHours(0,0,0,0);
+  d.setDate(1);
+  return d;
+}
 
 export default function ListView(){
   const [posts, setPosts] = useState([]);
-  const [filters, setFilters] = useState({search:'', channel:'', content_type:'', status:''});
+  const [filters, setFilters] = useState({search:'', channel:'', content_type:'', status:'', period:'all'});
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [deletingPostId, setDeletingPostId] = useState(null);
@@ -74,13 +87,34 @@ export default function ListView(){
     }
   };
 
-  const filteredPosts = useMemo(()=>posts.filter(p=>
-    (!filters.search || (p.project_name||'').toLowerCase().includes(filters.search.toLowerCase())) &&
-    (!filters.channel || p.channel===filters.channel) &&
-    (!filters.content_type || p.content_type===filters.content_type) &&
-    (!filters.status || p.status===filters.status) &&
-    (!myPostsOnly || p.created_by==currentUserId)
-  ),[posts,filters,myPostsOnly]);
+  const filteredPosts = useMemo(()=>{
+    const now = new Date();
+    const weekStart = startOfWeek(now);
+    const nextWeek = new Date(weekStart);
+    nextWeek.setDate(nextWeek.getDate()+7);
+    const monthStart = startOfMonth(now);
+    const nextMonth = new Date(monthStart);
+    nextMonth.setMonth(nextMonth.getMonth()+1);
+
+    return posts.filter(p=>{
+      const date = p.scheduled_at ? new Date(p.scheduled_at) : null;
+      const validDate = date && !Number.isNaN(date.getTime());
+      const inPeriod = filters.period==='week'
+        ? validDate && date>=weekStart && date<nextWeek
+        : filters.period==='month'
+          ? validDate && date>=monthStart && date<nextMonth
+          : true;
+
+      return (
+        (!filters.search || (p.project_name||'').toLowerCase().includes(filters.search.toLowerCase())) &&
+        (!filters.channel || p.channel===filters.channel) &&
+        (!filters.content_type || p.content_type===filters.content_type) &&
+        (!filters.status || p.status===filters.status) &&
+        (!myPostsOnly || p.created_by==currentUserId) &&
+        inPeriod
+      );
+    });
+  },[posts,filters,myPostsOnly]);
 
   const groups = useMemo(()=>{
     const map = {};
@@ -124,11 +158,30 @@ export default function ListView(){
         </div>
         <div className="list-actions">
           <button className="list-tool-btn" type="button">Sort</button>
-          <button className="list-tool-btn" type="button">Filters</button>
+          <button className={`list-tool-btn ${filters.period!=='all'?'active':''}`} type="button" onClick={()=>setFilters(f=>({...f,period:f.period==='all'?'week':f.period==='week'?'month':'all'}))} title="Filter by week or month">
+            {filters.period==='week'?'This Week':filters.period==='month'?'This Month':'Filters'}
+          </button>
           <button className="btn-secondary" type="button" onClick={()=>window.dispatchEvent(new CustomEvent('requestBulkCreate'))}>Bulk</button>
           <button className="btn-primary" type="button" onClick={()=>setShowCreateModal(true)}><span className="new-post-plus">+</span> New Scheduled Post <span className="fab-shortcut">N</span></button>
         </div>
       </div>
+
+      <div style={{display:'flex',justifyContent:'flex-end',gap:6,marginBottom:10}}>
+        {[
+          ['all','All'],
+          ['week','This Week'],
+          ['month','This Month'],
+        ].map(([value,label])=>(
+          <button
+            key={value}
+            type="button"
+            className={filters.period===value?'active':''}
+            onClick={()=>setFilters(f=>({...f,period:value}))}
+            style={{padding:'6px 10px',borderRadius:8,border:'1px solid #ddd',background:filters.period===value?'#eeeaff':'#fff',fontWeight:600}}
+          >{label}</button>
+        ))}
+      </div>
+
       {deleteError && <div className="card" style={{marginBottom:12,padding:'10px 14px',color:'#b42318',background:'#fff1f0'}}>{deleteError}</div>}
       {groupByDate ? (
         <div className="date-groups">
