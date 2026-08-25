@@ -1,6 +1,6 @@
-const GOOGLE_SHEETS_SYNC_VERSION = '2026-08-25-v1';
+const GOOGLE_SHEETS_SYNC_VERSION = '2026-08-25-v2';
 
-export async function syncAllToGoogleSheets(env) {
+export async function syncAllToGoogleSheets(env, options = {}) {
   const webhook = String(env.GSHEET_WEBHOOK_URL || '').trim();
   const secret = String(env.GSHEET_SYNC_SECRET || '').trim();
 
@@ -13,15 +13,12 @@ export async function syncAllToGoogleSheets(env) {
   }
 
   try {
-    // Do not query sqlite_master. Cloudflare D1 can expose protected
-    // internal tables such as _cf_KV, which application code cannot read.
     const queries = {
       posts: 'SELECT * FROM posts',
       templates: 'SELECT * FROM templates',
       settings: 'SELECT * FROM settings',
       invites: 'SELECT * FROM invites',
       audit: 'SELECT * FROM audit',
-      // Never export password_hash/password_salt.
       users: `
         SELECT
           id,
@@ -41,7 +38,6 @@ export async function syncAllToGoogleSheets(env) {
         const result = await env.DB.prepare(sql).all();
         tables[name] = result.results || [];
       } catch (error) {
-        // These tables are optional for older schemas.
         if (['templates', 'settings', 'invites', 'audit'].includes(name)) {
           console.warn(`Skipping ${name}:`, error?.message || error);
           continue;
@@ -56,11 +52,11 @@ export async function syncAllToGoogleSheets(env) {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      redirect: 'follow',
       body: JSON.stringify({
         secret,
         tables,
         version: GOOGLE_SHEETS_SYNC_VERSION,
+        mode: options.mode || 'manual',
       }),
     });
 
@@ -68,7 +64,7 @@ export async function syncAllToGoogleSheets(env) {
 
     if (!response.ok) {
       throw new Error(
-        `Google Apps Script HTTP ${response.status}: ${responseText.slice(0, 500)}`
+        `Google Apps Script HTTP ${response.status}: ${responseText.slice(0, 1000)}`
       );
     }
 
@@ -76,7 +72,7 @@ export async function syncAllToGoogleSheets(env) {
     try {
       result = JSON.parse(responseText);
     } catch {
-      result = { raw: responseText.slice(0, 500) };
+      result = { raw: responseText.slice(0, 1000) };
     }
 
     if (result && result.ok === false) {
@@ -89,6 +85,9 @@ export async function syncAllToGoogleSheets(env) {
       ok: true,
       version: GOOGLE_SHEETS_SYNC_VERSION,
       tables: Object.keys(tables),
+      counts: Object.fromEntries(
+        Object.entries(tables).map(([name, rows]) => [name, rows.length])
+      ),
       response: result,
     };
   } catch (error) {
