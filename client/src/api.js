@@ -1,9 +1,8 @@
 import axios from 'axios';
 
-// Use the Vercel same-origin /api proxy. Vercel forwards /api/*
-// to the Cloudflare Worker, avoiding browser CORS/network issues.
+// Same-origin Vercel API proxy. The Vercel function at /api/[...path].js
+// forwards requests to the Cloudflare Worker without browser CORS issues.
 const baseURL = '/api';
-
 const TOKEN_KEY = 'content_schedule_auth_token';
 
 const api = axios.create({
@@ -18,11 +17,37 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem(TOKEN_KEY);
 
   if (token) {
+    config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
 
   return config;
 });
+
+function errorMessage(data, fallback = 'Request failed') {
+  if (typeof data === 'string' && data.trim()) {
+    return data;
+  }
+
+  if (data && typeof data === 'object') {
+    if (typeof data.error === 'string') return data.error;
+    if (data.error && typeof data.error === 'object') {
+      try {
+        return JSON.stringify(data.error);
+      } catch {
+        return 'API returned an error object';
+      }
+    }
+
+    try {
+      return JSON.stringify(data);
+    } catch {
+      return fallback;
+    }
+  }
+
+  return fallback;
+}
 
 api.interceptors.response.use(
   (response) => response,
@@ -32,15 +57,15 @@ api.interceptors.response.use(
     if (!error.response) {
       return Promise.reject(
         new Error(
-          'Network Error: API proxy is unavailable. Please redeploy the Vercel project.'
+          `API proxy request failed: ${error.message || 'Failed to fetch'}`
         )
       );
     }
 
-    const message =
-      error.response?.data?.error ||
-      error.message ||
-      'Request failed';
+    const message = errorMessage(
+      error.response.data,
+      error.message || 'Request failed'
+    );
 
     if (
       status === 404 &&
@@ -48,7 +73,7 @@ api.interceptors.response.use(
     ) {
       return Promise.reject(
         new Error(
-          'Login API not found. Please redeploy the latest Vercel project.'
+          `Login API not found. ${message}`
         )
       );
     }
