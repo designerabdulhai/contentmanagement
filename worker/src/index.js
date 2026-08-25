@@ -9,7 +9,7 @@
  * - Google Sheets sync is kept in this same file so there is no module import.
  */
 
-const WORKER_VERSION = '2026-08-25-esm-stable-v6';
+const WORKER_VERSION = '2026-08-25-esm-stable-v7';
 const GOOGLE_SHEETS_SYNC_VERSION = '2026-08-25-v4';
 
 const CORS = {
@@ -309,10 +309,11 @@ async function handle(request, env) {
   const method = request.method.toUpperCase();
   const db = env.DB;
 
-  // -------------------------------------------------------
-  // PUBLIC HEALTH
-  // -------------------------------------------------------
-  if (method === 'GET' && path === '/api/health') {
+  // PUBLIC HEALTH: both / and /api/health are public.
+  if (
+    method === 'GET' &&
+    (path === '/api' || path === '/api/health')
+  ) {
     try {
       await db.prepare('SELECT 1 AS ok').first();
 
@@ -336,9 +337,7 @@ async function handle(request, env) {
     }
   }
 
-  // -------------------------------------------------------
   // LOGIN
-  // -------------------------------------------------------
   if (method === 'POST' && path === '/api/auth/login') {
     const payload = await readJson(request);
     const email = String(payload.email || '').trim().toLowerCase();
@@ -403,9 +402,7 @@ async function handle(request, env) {
     });
   }
 
-  // -------------------------------------------------------
   // AUTH ME
-  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/auth/me') {
     const user = await requireAuth(request, db);
 
@@ -427,9 +424,7 @@ async function handle(request, env) {
     });
   }
 
-  // -------------------------------------------------------
   // LOGOUT
-  // -------------------------------------------------------
   if (method === 'POST' && path === '/api/auth/logout') {
     return json({ ok: true });
   }
@@ -444,9 +439,7 @@ async function handle(request, env) {
     );
   }
 
-  // -------------------------------------------------------
   // POSTS - LIST
-  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/posts') {
     const result = await db
       .prepare(`
@@ -465,9 +458,7 @@ async function handle(request, env) {
     return json(result.results || []);
   }
 
-  // -------------------------------------------------------
   // CREATE POST
-  // -------------------------------------------------------
   if (method === 'POST' && path === '/api/posts') {
     const payload = await readJson(request);
 
@@ -525,19 +516,12 @@ async function handle(request, env) {
     return json(row, 201);
   }
 
-  // -------------------------------------------------------
   // POST DELETE
-  // POST /api/posts/:id/delete
-  // POST /api/posts/:id/remove
-  // -------------------------------------------------------
   const postDeleteMatch = path.match(
     /^\/api\/posts\/(\d+)\/(delete|remove)$/
   );
 
-  if (
-    method === 'POST' &&
-    postDeleteMatch
-  ) {
+  if (method === 'POST' && postDeleteMatch) {
     const id = Number(postDeleteMatch[1]);
 
     const row = await db
@@ -572,12 +556,7 @@ async function handle(request, env) {
     });
   }
 
-  // -------------------------------------------------------
   // SINGLE POST
-  // GET /api/posts/:id
-  // PUT /api/posts/:id
-  // DELETE /api/posts/:id
-  // -------------------------------------------------------
   const singlePostMatch = path.match(
     /^\/api\/posts\/(\d+)$/
   );
@@ -702,9 +681,7 @@ async function handle(request, env) {
     }
   }
 
-  // -------------------------------------------------------
   // SETTINGS
-  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/settings') {
     const result = await db
       .prepare('SELECT key, value FROM settings')
@@ -713,9 +690,7 @@ async function handle(request, env) {
     return json(settingsObject(result.results || []));
   }
 
-  // -------------------------------------------------------
   // TEMPLATES
-  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/templates') {
     const result = await db
       .prepare(`
@@ -728,9 +703,7 @@ async function handle(request, env) {
     return json(result.results || []);
   }
 
-  // -------------------------------------------------------
   // USERS
-  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/users') {
     const result = await db
       .prepare(`
@@ -749,9 +722,7 @@ async function handle(request, env) {
     return json(result.results || []);
   }
 
-  // -------------------------------------------------------
   // INVITES
-  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/invites') {
     const result = await db
       .prepare(`
@@ -769,9 +740,7 @@ async function handle(request, env) {
     return json(result.results || []);
   }
 
-  // -------------------------------------------------------
   // SUMMARY
-  // -------------------------------------------------------
   if (method === 'GET' && path === '/api/summary') {
     const [total, scheduled, uploaded, listed, overdue] =
       await db.batch([
@@ -808,9 +777,7 @@ async function handle(request, env) {
     });
   }
 
-  // -------------------------------------------------------
   // GOOGLE SHEETS SYNC
-  // -------------------------------------------------------
   if (
     method === 'POST' &&
     path === '/api/google-sheets/sync'
@@ -836,9 +803,6 @@ async function handle(request, env) {
     }
   }
 
-  // -------------------------------------------------------
-  // FALLBACK
-  // -------------------------------------------------------
   return json(
     {
       error: 'not found',
@@ -851,10 +815,7 @@ async function handle(request, env) {
   );
 }
 
-/* =========================================================
-   ES MODULE WORKER ENTRY POINT
-   DO NOT REMOVE THIS.
-========================================================= */
+// ES MODULE WORKER ENTRY POINT. DO NOT REMOVE.
 export default {
   async fetch(request, env, ctx) {
     try {
