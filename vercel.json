@@ -8,16 +8,9 @@
   "functions": {
     "api/[...route].js": {
       "maxDuration": 30
-    },
-    "api/auth/login.js": {
-      "maxDuration": 30
     }
   },
   "routes": [
-    {
-      "src": "/api/auth/login",
-      "dest": "/api/auth/login.js"
-    },
     {
       "src": "/api/(.*)",
       "dest": "/api/[...route].js"
