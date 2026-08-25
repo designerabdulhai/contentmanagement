@@ -4,6 +4,8 @@ import PostForm from '../components/PostForm'
 import LinkActions from '../components/LinkActions'
 
 const STATUS_OPTIONS = ['Listed','Scheduled','Uploaded'];
+const WORKER_URL = 'https://contentmanagement-api.rubel-bhd1.workers.dev';
+const TOKEN_KEY = 'content_schedule_auth_token';
 
 function formatDayLabel(value){
   if(!value) return 'No date';
@@ -15,6 +17,47 @@ function formatTime(value){
   if(!value) return '';
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+}
+
+async function deleteFromWorker(id) {
+  const token = localStorage.getItem(TOKEN_KEY) || '';
+  const headers = {
+    Accept: 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const attempts = [
+    { method: 'POST', path: `/api/posts/${encodeURIComponent(id)}/delete` },
+    { method: 'POST', path: `/api/posts/${encodeURIComponent(id)}/remove` },
+    { method: 'DELETE', path: `/api/posts/${encodeURIComponent(id)}` },
+  ];
+
+  const errors = [];
+
+  for (const attempt of attempts) {
+    try {
+      const response = await fetch(`${WORKER_URL}${attempt.path}`, {
+        method: attempt.method,
+        headers,
+        redirect: 'follow',
+      });
+
+      const text = await response.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+
+      if (response.ok && (data?.deleted === true || data?.ok === true)) {
+        return data;
+      }
+
+      const message = data?.error || data?.message || text || `HTTP ${response.status}`;
+      errors.push(`${attempt.method} ${attempt.path}: ${message}`);
+    } catch (error) {
+      errors.push(`${attempt.method} ${attempt.path}: ${error?.message || error}`);
+    }
+  }
+
+  throw new Error(errors.join(' | '));
 }
 
 export default function ListView(){
@@ -54,22 +97,7 @@ export default function ListView(){
     setDeleteError('');
     setDeletingPostId(id);
     try {
-      // Use POST for deletion because it survives proxies/environments that
-      // mishandle DELETE requests. The Worker supports this endpoint and the
-      // existing DELETE endpoint remains available as a fallback.
-      let response;
-      try {
-        response = await api.post(`/posts/${id}/delete`);
-      } catch (postError) {
-        if (postError?.response?.status === 404 || /not found/i.test(postError?.message || '')) {
-          response = await api.delete(`/posts/${id}`);
-        } else {
-          throw postError;
-        }
-      }
-      if (response?.status < 200 || response?.status >= 300) {
-        throw new Error(`Delete failed (${response?.status || 'unknown'})`);
-      }
+      await deleteFromWorker(id);
       setPosts(current => current.filter(post => Number(post.id) !== Number(id)));
     } catch (error) {
       setDeleteError(error?.message || 'Unable to delete post');
