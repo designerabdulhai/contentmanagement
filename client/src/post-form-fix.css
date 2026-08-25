@@ -1,22 +1,28 @@
-/* Post form: isolated styles so Calendar / Settings / List CSS stay untouched. */
-.postform.drawer{width:100%;color:var(--text)}
-.postform.drawer>h3{margin:0 0 20px;font-size:20px;line-height:1.2}
-.postform .form-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+/* Create/Edit Post modal UI — isolated from List / Calendar / Settings. */
+.postform.drawer{width:100%;max-width:100%;color:var(--text);background:var(--card)}
+.postform.drawer>h3{margin:0;padding:2px 0 18px;font-size:21px;line-height:1.25;font-weight:800;letter-spacing:-.02em;border-bottom:1px solid var(--border)}
+.postform .setting-help{margin:10px 0 0;padding:9px 11px;border-radius:9px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600}
+.postform .setting-help.form-error{background:#fef2f2;color:#b42318;border:1px solid #fecaca}
+.postform .form-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px 12px;align-items:start;padding-top:18px}
 .postform .project-field,.postform .schedule-field,.postform .uploaded-link-field,.postform .template-row{min-width:0}
 .postform .project-field{position:relative}
-.postform .form-grid>input,.postform .form-grid>select,.postform .project-field>input,.postform .schedule-field input,.postform .uploaded-link-field>input,.postform .notes-field,.postform .template-row select{width:100%;min-height:42px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);outline:none}
+.postform .form-grid>input,.postform .form-grid>select,.postform .project-field>input,.postform .schedule-field input,.postform .uploaded-link-field>input,.postform .notes-field,.postform .template-row select{width:100%;min-height:44px;padding:10px 13px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);outline:none;transition:border-color .15s ease,box-shadow .15s ease,background .15s ease}
+.postform .form-grid>select,.postform .template-row select{appearance:auto}
+.postform .form-grid>input:hover,.postform .form-grid>select:hover,.postform .project-field>input:hover,.postform .schedule-field input:hover,.postform .uploaded-link-field>input:hover,.postform .notes-field:hover,.postform .template-row select:hover{border-color:#c7cdd8}
 .postform .form-grid>input:focus,.postform .form-grid>select:focus,.postform .project-field>input:focus,.postform .schedule-field input:focus,.postform .uploaded-link-field>input:focus,.postform .notes-field:focus,.postform .template-row select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .postform .template-row{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
-.postform .template-row .btn-secondary{min-height:42px;white-space:nowrap}
-.postform .schedule-field{display:flex;flex-direction:column;gap:5px}
-.postform .schedule-field label{font-size:12px;font-weight:700;color:var(--muted)}
-.postform .schedule-field input{height:42px}
+.postform .template-row .btn-secondary{min-height:44px;white-space:nowrap}
+.postform .schedule-field{display:flex;flex-direction:column;gap:6px}
+.postform .schedule-field label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.postform .schedule-field input{height:44px}
 .postform .uploaded-link-field{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
 .postform .uploaded-link-field .link-actions{display:flex;gap:6px}
-.postform .notes-field{min-height:92px;resize:vertical}
+.postform .uploaded-link-field .link-actions button{width:38px;height:38px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--muted)}
+.postform .uploaded-link-field .link-actions button:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.postform .notes-field{grid-column:1/-1;min-height:96px;resize:vertical;line-height:1.45}
 .postform .autofill-hint,.postform .form-error{grid-column:1/-1;font-size:12px;color:var(--muted)}
-.postform .autofill-hint{padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg)}
-.postform .autofill-hint button{margin-left:6px;border:0;background:none;color:var(--accent);font-weight:700;padding:0}
+.postform .autofill-hint{padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:var(--bg)}
+.postform .autofill-hint button{margin-left:6px;border:0;background:none;color:var(--accent);font-weight:800;padding:0}
 .postform .suggestions-dropdown{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:120;max-height:260px;overflow:auto;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 18px 44px rgba(2,6,23,.14);padding:5px}
 .postform .suggestion-item{display:flex;width:100%;align-items:flex-start;justify-content:space-between;gap:14px;text-align:left;border:0;background:transparent;color:var(--text);border-radius:9px;padding:10px 11px;cursor:pointer}
 .postform .suggestion-item:hover,.postform .suggestion-item:focus{background:var(--accent-soft);outline:none}
@@ -37,6 +43,9 @@
 .postform .panel-controls .btn-secondary{min-height:34px;padding:0 10px;font-size:12px}
 .postform .panel-body{margin-top:9px;border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:6px}
 .postform .panel-row{font-size:12px;color:var(--text);padding:7px 8px;background:var(--card);border:1px solid var(--border);border-radius:8px}
-.postform .form-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
-.postform .form-actions .btn-primary,.postform .form-actions .btn-secondary{min-height:40px;padding:0 15px}
-@media(max-width:720px){.postform .form-grid{grid-template-columns:1fr}.postform .template-row{grid-column:auto;grid-template-columns:1fr}.postform .uploaded-link-field{grid-template-columns:1fr}.postform .form-actions{justify-content:stretch}.postform .form-actions button{flex:1}.postform .suggestion-meta{align-items:flex-start}.postform .suggestion-item{flex-direction:column;gap:4px}.postform .suggestion-date{white-space:normal}.postform .project-history-row{align-items:flex-start;flex-direction:column}.postform .project-history-details{justify-content:flex-start;text-align:left}}
+.postform .form-actions{display:flex;justify-content:flex-end;gap:9px;margin:20px -2px -2px;padding:14px 0 0;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--card)}
+.postform .form-actions .btn-primary,.postform .form-actions .btn-secondary{min-height:42px;padding:0 18px;border-radius:9px}
+.postform .form-actions .btn-primary{box-shadow:0 6px 16px rgba(108,92,231,.2)}
+.postform .form-actions .btn-secondary{background:var(--bg)}
+.postform .form-actions .btn-secondary:hover{background:var(--accent-soft)}
+@media(max-width:720px){.postform .form-grid{grid-template-columns:1fr;gap:12px}.postform .template-row,.postform .notes-field,.postform .autofill-hint{grid-column:auto}.postform .template-row{grid-template-columns:1fr}.postform .uploaded-link-field{grid-template-columns:1fr}.postform .form-actions{justify-content:stretch}.postform .form-actions button{flex:1}.postform .suggestion-meta{align-items:flex-start}.postform .suggestion-item{flex-direction:column;gap:4px}.postform .suggestion-date{white-space:normal}.postform .project-history-row{align-items:flex-start;flex-direction:column}.postform .project-history-details{justify-content:flex-start;text-align:left}}
