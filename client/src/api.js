@@ -1,9 +1,8 @@
 import axios from 'axios';
 
-// Production Cloudflare Worker API.
-// Keep this explicit so an old/misconfigured Vercel VITE_API_URL
-// cannot redirect authentication requests to the wrong backend.
-const baseURL = 'https://contentmanagement-api.rubel-bhd1.workers.dev/api';
+// Use the Vercel same-origin /api proxy. Vercel forwards /api/*
+// to the Cloudflare Worker, avoiding browser CORS/network issues.
+const baseURL = '/api';
 
 const TOKEN_KEY = 'content_schedule_auth_token';
 
@@ -33,7 +32,7 @@ api.interceptors.response.use(
     if (!error.response) {
       return Promise.reject(
         new Error(
-          'Network Error: cannot reach Cloudflare API. Please check the Worker deployment and CORS settings.'
+          'Network Error: API proxy is unavailable. Please redeploy the Vercel project.'
         )
       );
     }
@@ -49,7 +48,7 @@ api.interceptors.response.use(
     ) {
       return Promise.reject(
         new Error(
-          'Login API not found. Please deploy the latest Cloudflare Worker.'
+          'Login API not found. Please redeploy the latest Vercel project.'
         )
       );
     }
