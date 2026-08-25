@@ -1,4 +1,13 @@
-const WORKER_VERSION = '2026-08-25-stable-v3';
+/*
+ * CONTENT MANAGEMENT API
+ * Cloudflare Worker + D1
+ * ES Module Worker
+ *
+ * Auth is stateless so it does not depend on a sessions table.
+ * Existing D1 data is not reset or recreated.
+ */
+
+const WORKER_VERSION = '2026-08-25-auth-stable-v5';
 const GOOGLE_SHEETS_SYNC_VERSION = '2026-08-25-v3';
 
 const CORS = {
@@ -10,11 +19,18 @@ const CORS = {
 };
 
 const json = (data, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: CORS });
+  new Response(JSON.stringify(data), {
+    status,
+    headers: CORS,
+  });
 
-const noContent = () => new Response(null, { status: 204, headers: CORS });
+const noContent = () =>
+  new Response(null, {
+    status: 204,
+    headers: CORS,
+  });
 
-async function body(request) {
+async function readBody(request) {
   try {
     return await request.json();
   } catch {
@@ -29,15 +45,9 @@ async function sha256Hex(value) {
     'SHA-256',
     encoder.encode(String(value))
   );
-
   return [...new Uint8Array(digest)]
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
-}
-
-function tokenFromRequest(request) {
-  const auth = String(request.headers.get('Authorization') || '');
-  return auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
 }
 
 function base64UrlEncode(value) {
@@ -51,7 +61,6 @@ function base64UrlDecode(value) {
   const normalized = String(value || '')
     .replace(/-/g, '+')
     .replace(/_/g, '/');
-
   return atob(
     normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
   );
@@ -61,10 +70,15 @@ async function passwordMatches(password, salt, storedHash) {
   const p = String(password ?? '');
   const s = String(salt ?? '').trim();
   const h = String(storedHash ?? '').trim().toLowerCase();
-
   if (!p || !h) return false;
 
-  return (await sha256Hex(p + s)).toLowerCase() === h;
+  // Preserve the existing password scheme first.
+  const salted = await sha256Hex(`${p}${s}`);
+  if (salted.toLowerCase() === h) return true;
+
+  // Compatibility fallback for accounts created with plain SHA-256.
+  const plain = await sha256Hex(p);
+  return plain.toLowerCase() === h;
 }
 
 async function createAuthToken(user) {
@@ -73,8 +87,12 @@ async function createAuthToken(user) {
   const signature = await sha256Hex(
     `${payload}.${String(user.password_hash || '')}`
   );
-
   return `${base64UrlEncode(payload)}.${signature}`;
+}
+
+function tokenFromRequest(request) {
+  const auth = String(request.headers.get('Authorization') || '');
+  return auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
 }
 
 async function requireAuth(request, db) {
@@ -90,19 +108,22 @@ async function requireAuth(request, db) {
     const id = Number(idText);
     const exp = Number(expText);
 
-    if (
-      !Number.isInteger(id) ||
-      !Number.isFinite(exp) ||
-      exp <= Math.floor(Date.now() / 1000)
-    ) {
-      return null;
-    }
+    if (!Number.isInteger(id) || !Number.isFinite(exp)) return null;
+    if (exp <= Math.floor(Date.now() / 1000)) return null;
 
     const user = await db
-      .prepare(
-        `SELECT id,display_name,email,photo,role,password_hash
-         FROM users WHERE id=? LIMIT 1`
-      )
+      .prepare(`
+        SELECT
+          id,
+          display_name,
+          email,
+          photo,
+          role,
+          password_hash
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+      `)
       .bind(id)
       .first();
 
@@ -112,7 +133,9 @@ async function requireAuth(request, db) {
       `${payload}.${String(user.password_hash)}`
     );
 
-    return expected === parts[1] ? user : null;
+    if (expected !== parts[1]) return null;
+
+    return user;
   } catch {
     return null;
   }
@@ -120,19 +143,30 @@ async function requireAuth(request, db) {
 
 function settingsObject(rows) {
   const out = {};
-
-  for (const row of rows) {
+  for (const row of rows || []) {
     out[row.key] = String(row.value || '')
       .split(',')
       .map((v) => v.trim())
       .filter(Boolean);
   }
-
   return out;
 }
 
-// Google Sheets sync is intentionally kept inside this single Worker file.
-// This avoids the previous missing googleSheets.js module problem.
+async function audit(db, postId, action, payload, actor = 'system') {
+  try {
+    await db
+      .prepare(`
+        INSERT INTO audit
+        (post_id, action, payload, actor)
+        VALUES (?, ?, ?, ?)
+      `)
+      .bind(postId, action, JSON.stringify(payload), actor)
+      .run();
+  } catch {
+    // Audit failure must not break the primary operation.
+  }
+}
+
 async function syncAllToGoogleSheets(env, options = {}) {
   const webhook = String(env.GSHEET_WEBHOOK_URL || '').trim();
   const secret = String(env.GSHEET_SYNC_SECRET || '').trim();
@@ -153,7 +187,7 @@ async function syncAllToGoogleSheets(env, options = {}) {
       invites: 'SELECT * FROM invites',
       audit: 'SELECT * FROM audit',
       users: `
-        SELECT id,display_name,email,photo,role,created_at
+        SELECT id, display_name, email, photo, role, created_at
         FROM users
       `,
     };
@@ -203,7 +237,7 @@ async function syncAllToGoogleSheets(env, options = {}) {
       result = { raw: responseText.slice(0, 1000) };
     }
 
-    if (result && result.ok === false) {
+    if (result?.ok === false) {
       throw new Error(
         result.error || 'Google Apps Script rejected the sync'
       );
@@ -219,11 +253,7 @@ async function syncAllToGoogleSheets(env, options = {}) {
       response: result,
     };
   } catch (error) {
-    console.error(
-      'Google Sheets sync failed:',
-      error?.message || error
-    );
-
+    console.error('Google Sheets sync failed:', error?.message || error);
     return {
       ok: false,
       version: GOOGLE_SHEETS_SYNC_VERSION,
@@ -232,48 +262,44 @@ async function syncAllToGoogleSheets(env, options = {}) {
   }
 }
 
+function normalizePath(pathname) {
+  let path = pathname.replace(/\/+/g, '/').replace(/\/+$/, '') || '/';
+  // Some proxies preserve /api; some Worker preview paths may omit it.
+  if (path.startsWith('/api/')) return path;
+  if (path === '/api') return '/api';
+  return `/api${path}`;
+}
+
 async function handle(request, env) {
   if (request.method === 'OPTIONS') return noContent();
 
   if (!env.DB) {
-    return json({ error: 'D1 binding DB is not configured' }, 500);
+    return json(
+      {
+        error: 'D1 binding DB is not configured',
+      },
+      500
+    );
   }
 
   const url = new URL(request.url);
-  const path = url.pathname.replace(/\/+$/, '') || '/';
-  const method = request.method;
+  const path = normalizePath(url.pathname);
+  const method = request.method.toUpperCase();
   const db = env.DB;
 
-  // Public health endpoints.
-  if (method === 'GET' && path === '/') {
-    return json({
-      ok: true,
-      service: 'contentmanagement-api',
-      database: 'D1',
-      version: WORKER_VERSION,
-    });
-  }
-
-  if (method === 'GET' && path === '/api/health') {
+  // Health is public.
+  if (method === 'GET' && (path === '/api/health' || path === '/api')) {
     return json({
       ok: true,
       database: 'D1',
       worker: 'contentmanagement-api',
       version: WORKER_VERSION,
-      routes: {
-        login: 'POST /api/auth/login',
-        posts: 'GET /api/posts',
-        createPost: 'POST /api/posts',
-        updatePost: 'PUT /api/posts/:id',
-        deletePost: 'DELETE /api/posts/:id',
-        deletePostPost: 'POST /api/posts/:id/delete',
-      },
     });
   }
 
-  // Login.
+  // LOGIN
   if (method === 'POST' && path === '/api/auth/login') {
-    const p = await body(request);
+    const p = await readBody(request);
     const email = String(p.email || '').trim().toLowerCase();
     const password = String(p.password || '');
 
@@ -282,46 +308,56 @@ async function handle(request, env) {
     }
 
     const user = await db
-      .prepare(
-        `SELECT id,display_name,email,photo,role,password_hash,password_salt
-         FROM users
-         WHERE lower(trim(email))=?
-         LIMIT 1`
-      )
+      .prepare(`
+        SELECT
+          id,
+          display_name,
+          email,
+          photo,
+          role,
+          password_hash,
+          password_salt
+        FROM users
+        WHERE lower(trim(email)) = ?
+        LIMIT 1
+      `)
       .bind(email)
       .first();
 
-    if (
-      !user ||
-      !(await passwordMatches(
-        password,
-        user.password_salt,
-        user.password_hash
-      ))
-    ) {
+    if (!user) {
       return json({ error: 'invalid email or password' }, 401);
     }
 
-    return json({
-      ok: true,
-      token: await createAuthToken(user),
-      user: {
-        id: user.id,
-        display_name: user.display_name,
-        email: user.email,
-        photo: user.photo,
-        role: user.role,
-      },
-    });
-  }
+    const valid = await passwordMatches(
+      password,
+      user.password_salt,
+      user.password_hash
+    );
 
-  if (method === 'GET' && path === '/api/auth/me') {
-    const user = await requireAuth(request, db);
-
-    if (!user) {
-      return json({ error: 'authentication required' }, 401);
+    if (!valid) {
+      return json({ error: 'invalid email or password' }, 401);
     }
 
+    const token = await createAuthToken(user);
+
+    return json({
+      ok: true,
+      token,
+      user: {
+        id: user.id,
+        display_name: user.display_name,
+        email: user.email,
+        photo: user.photo,
+        role: user.role,
+      },
+    });
+  }
+
+  // AUTH ME
+  if (method === 'GET' && path === '/api/auth/me') {
+    const user = await requireAuth(request, db);
+    if (!user) return json({ error: 'authentication required' }, 401);
+
     return json({
       user: {
         id: user.id,
@@ -333,58 +369,58 @@ async function handle(request, env) {
     });
   }
 
+  // LOGOUT
   if (method === 'POST' && path === '/api/auth/logout') {
     return json({ ok: true });
   }
 
-  // Google Sheets.
-  if (method === 'POST' && path === '/api/google-sheets/sync') {
-    const user = await requireAuth(request, db);
-    if (!user) return json({ error: 'authentication required' }, 401);
-
-    const result = await syncAllToGoogleSheets(env, {
-      mode: 'manual',
-      actor: user.email,
-    });
-
-    return json(result, result.ok ? 200 : 502);
+  // Everything below login requires auth.
+  const user = await requireAuth(request, db);
+  if (!user) {
+    return json({ error: 'authentication required' }, 401);
   }
 
-  // List posts.
+  // POSTS LIST
   if (method === 'GET' && path === '/api/posts') {
-    const user = await requireAuth(request, db);
-    if (!user) return json({ error: 'authentication required' }, 401);
-
     const result = await db
-      .prepare(
-        `SELECT p.*, u.display_name AS owner
-         FROM posts p
-         LEFT JOIN users u ON p.created_by=u.id
-         ORDER BY p.scheduled_at IS NULL, p.scheduled_at`
-      )
+      .prepare(`
+        SELECT
+          p.*,
+          u.display_name AS owner
+        FROM posts p
+        LEFT JOIN users u ON p.created_by = u.id
+        ORDER BY p.scheduled_at IS NULL, p.scheduled_at
+      `)
       .all();
 
     return json(result.results || []);
   }
 
-  // Create post.
+  // CREATE POST
   if (method === 'POST' && path === '/api/posts') {
-    const user = await requireAuth(request, db);
-    if (!user) return json({ error: 'authentication required' }, 401);
+    const p = await readBody(request);
 
-    const p = await body(request);
-
-    if (!p.project_name) {
+    if (!String(p.project_name || '').trim()) {
       return json({ error: 'project_name required' }, 400);
     }
 
     const result = await db
-      .prepare(
-        `INSERT INTO posts
-        (project_name,content_type,channel,platform,status,scheduled_at,
-         uploaded_link,notes,created_by,recurring_rule)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`
-      )
+      .prepare(`
+        INSERT INTO posts
+        (
+          project_name,
+          content_type,
+          channel,
+          platform,
+          status,
+          scheduled_at,
+          uploaded_link,
+          notes,
+          created_by,
+          recurring_rule
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
       .bind(
         p.project_name,
         p.content_type || null,
@@ -400,63 +436,80 @@ async function handle(request, env) {
       .run();
 
     const row = await db
-      .prepare('SELECT * FROM posts WHERE id=?')
+      .prepare('SELECT * FROM posts WHERE id = ?')
       .bind(result.meta.last_row_id)
       .first();
+
+    await audit(db, row?.id, 'create', row, user.email);
 
     return json(row, 201);
   }
 
-  // Post ID actions. Supports both /api/posts/:id and /posts/:id so
-  // an upstream rewrite cannot break delete/update operations.
-  const postActionMatch = path.match(
-    /(?:^|\/)posts\/(\d+)(?:\/(delete|remove))?$/
+  // POST DELETE aliases.
+  const deleteMatch = path.match(
+    /^\/api\/posts\/(\d+)\/(delete|remove)$/
   );
 
-  if (postActionMatch) {
-    const id = Number(postActionMatch[1]);
-    const action = postActionMatch[2] || '';
-    const user = await requireAuth(request, db);
+  if (
+    method === 'POST' &&
+    deleteMatch
+  ) {
+    const id = Number(deleteMatch[1]);
 
-    if (!user) {
-      return json({ error: 'authentication required' }, 401);
+    const row = await db
+      .prepare('SELECT * FROM posts WHERE id = ? LIMIT 1')
+      .bind(id)
+      .first();
+
+    if (!row) {
+      return json(
+        {
+          error: 'post not found',
+          id,
+        },
+        404
+      );
     }
 
-    // DELETE /api/posts/:id
-    // POST  /api/posts/:id/delete
-    // POST  /api/posts/:id/remove
-    if (
-      (method === 'DELETE' && !action) ||
-      (method === 'POST' && (action === 'delete' || action === 'remove'))
-    ) {
-      const existing = await db
-        .prepare('SELECT id FROM posts WHERE id=? LIMIT 1')
-        .bind(id)
-        .first();
+    await audit(
+      db,
+      id,
+      'delete',
+      row,
+      user.email
+    );
 
-      if (!existing) {
-        return json({ error: 'post not found', id }, 404);
-      }
+    const result = await db
+      .prepare('DELETE FROM posts WHERE id = ?')
+      .bind(id)
+      .run();
 
-      await db.prepare('DELETE FROM posts WHERE id=?').bind(id).run();
+    return json({
+      ok: result.meta.changes > 0,
+      deleted: true,
+      id,
+    });
+  }
 
-      return json({
-        ok: true,
-        deleted: true,
-        id,
-      });
-    }
+  // Single post GET / PUT / DELETE.
+  const postMatch = path.match(
+    /^\/api\/posts\/(\d+)$/
+  );
 
-    // GET /api/posts/:id
-    if (method === 'GET' && !action) {
+  if (postMatch) {
+    const id = Number(postMatch[1]);
+
+    if (method === 'GET') {
       const row = await db
-        .prepare(
-          `SELECT p.*,u.display_name AS owner
-           FROM posts p
-           LEFT JOIN users u ON p.created_by=u.id
-           WHERE p.id=?
-           LIMIT 1`
-        )
+        .prepare(`
+          SELECT
+            p.*,
+            u.display_name AS owner
+          FROM posts p
+          LEFT JOIN users u ON p.created_by = u.id
+          WHERE p.id = ?
+          LIMIT 1
+        `)
         .bind(id)
         .first();
 
@@ -465,12 +518,11 @@ async function handle(request, env) {
         : json({ error: 'post not found', id }, 404);
     }
 
-    // PUT /api/posts/:id
-    if (method === 'PUT' && !action) {
-      const p = await body(request);
+    if (method === 'PUT') {
+      const p = await readBody(request);
 
       const existing = await db
-        .prepare('SELECT * FROM posts WHERE id=? LIMIT 1')
+        .prepare('SELECT * FROM posts WHERE id = ? LIMIT 1')
         .bind(id)
         .first();
 
@@ -479,19 +531,20 @@ async function handle(request, env) {
       }
 
       await db
-        .prepare(
-          `UPDATE posts SET
-           project_name=?,
-           content_type=?,
-           channel=?,
-           platform=?,
-           status=?,
-           scheduled_at=?,
-           uploaded_link=?,
-           notes=?,
-           recurring_rule=?
-           WHERE id=?`
-        )
+        .prepare(`
+          UPDATE posts
+          SET
+            project_name = ?,
+            content_type = ?,
+            channel = ?,
+            platform = ?,
+            status = ?,
+            scheduled_at = ?,
+            uploaded_link = ?,
+            notes = ?,
+            recurring_rule = ?
+          WHERE id = ?
+        `)
         .bind(
           p.project_name ?? existing.project_name,
           p.content_type ?? existing.content_type,
@@ -506,95 +559,175 @@ async function handle(request, env) {
         )
         .run();
 
-      return json(
-        await db.prepare('SELECT * FROM posts WHERE id=?').bind(id).first()
-      );
+      const updated = await db
+        .prepare('SELECT * FROM posts WHERE id = ?')
+        .bind(id)
+        .first();
+
+      await audit(db, id, 'update', updated, user.email);
+
+      return json(updated);
+    }
+
+    if (method === 'DELETE') {
+      const row = await db
+        .prepare('SELECT * FROM posts WHERE id = ? LIMIT 1')
+        .bind(id)
+        .first();
+
+      if (!row) {
+        return json({ error: 'post not found', id }, 404);
+      }
+
+      await audit(db, id, 'delete', row, user.email);
+
+      const result = await db
+        .prepare('DELETE FROM posts WHERE id = ?')
+        .bind(id)
+        .run();
+
+      return json({
+        ok: result.meta.changes > 0,
+        deleted: true,
+        id,
+      });
     }
   }
 
+  // SETTINGS
   if (method === 'GET' && path === '/api/settings') {
-    const user = await requireAuth(request, db);
-    if (!user) return json({ error: 'authentication required' }, 401);
+    const result = await db
+      .prepare('SELECT key, value FROM settings')
+      .all();
 
-    const result = await db.prepare('SELECT key,value FROM settings').all();
     return json(settingsObject(result.results || []));
   }
 
+  // TEMPLATES
   if (method === 'GET' && path === '/api/templates') {
-    const user = await requireAuth(request, db);
-    if (!user) return json({ error: 'authentication required' }, 401);
-
     const result = await db
-      .prepare('SELECT * FROM templates ORDER BY created_at DESC')
+      .prepare(`
+        SELECT * FROM templates
+        ORDER BY created_at DESC
+      `)
       .all();
 
     return json(result.results || []);
   }
 
+  // USERS
   if (method === 'GET' && path === '/api/users') {
-    const user = await requireAuth(request, db);
-    if (!user) return json({ error: 'authentication required' }, 401);
-
     const result = await db
-      .prepare(
-        `SELECT id,display_name,email,photo,role,created_at
-         FROM users ORDER BY created_at DESC`
-      )
+      .prepare(`
+        SELECT
+          id,
+          display_name,
+          email,
+          photo,
+          role,
+          created_at
+        FROM users
+        ORDER BY created_at DESC
+      `)
       .all();
 
     return json(result.results || []);
   }
 
+  // INVITES
   if (method === 'GET' && path === '/api/invites') {
-    const user = await requireAuth(request, db);
-    if (!user) return json({ error: 'authentication required' }, 401);
-
     const result = await db
-      .prepare(
-        `SELECT id,email,role,status,created_at
-         FROM invites ORDER BY created_at DESC`
-      )
+      .prepare(`
+        SELECT
+          id,
+          email,
+          role,
+          status,
+          created_at
+        FROM invites
+        ORDER BY created_at DESC
+      `)
       .all();
 
     return json(result.results || []);
   }
 
+  // SUMMARY
   if (method === 'GET' && path === '/api/summary') {
-    const user = await requireAuth(request, db);
-    if (!user) return json({ error: 'authentication required' }, 401);
-
-    const [a, b, c, d, e] = await db.batch([
-      db.prepare('SELECT COUNT(*) AS c FROM posts'),
-      db.prepare(
-        `SELECT COUNT(*) AS c FROM posts
-         WHERE scheduled_at>=datetime('now')
-         AND scheduled_at<datetime('now','+7 days')`
-      ),
-      db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE status='Uploaded'`),
-      db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE status='Listed'`),
-      db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE is_overdue=1`),
-    ]);
+    const [total, scheduled, uploaded, listed, overdue] =
+      await db.batch([
+        db.prepare('SELECT COUNT(*) AS c FROM posts'),
+        db.prepare(`
+          SELECT COUNT(*) AS c
+          FROM posts
+          WHERE scheduled_at >= datetime('now')
+            AND scheduled_at < datetime('now', '+7 days')
+        `),
+        db.prepare(`
+          SELECT COUNT(*) AS c
+          FROM posts
+          WHERE status = 'Uploaded'
+        `),
+        db.prepare(`
+          SELECT COUNT(*) AS c
+          FROM posts
+          WHERE status = 'Listed'
+        `),
+        db.prepare(`
+          SELECT COUNT(*) AS c
+          FROM posts
+          WHERE is_overdue = 1
+        `),
+      ]);
 
     return json({
-      total: a.results[0]?.c || 0,
-      scheduledWeek: b.results[0]?.c || 0,
-      uploadedMonth: c.results[0]?.c || 0,
-      listedCount: d.results[0]?.c || 0,
-      overdue: e.results[0]?.c || 0,
+      total: total.results?.[0]?.c || 0,
+      scheduledWeek: scheduled.results?.[0]?.c || 0,
+      uploadedMonth: uploaded.results?.[0]?.c || 0,
+      listedCount: listed.results?.[0]?.c || 0,
+      overdue: overdue.results?.[0]?.c || 0,
     });
   }
 
-  return json({ error: 'not found', path, method }, 404);
+  // GOOGLE SHEETS SYNC
+  if (
+    method === 'POST' &&
+    path === '/api/google-sheets/sync'
+  ) {
+    const result = await syncAllToGoogleSheets(env, {
+      mode: 'manual',
+      actor: user.email,
+    });
+
+    return json(
+      result,
+      result.ok ? 200 : 502
+    );
+  }
+
+  return json(
+    {
+      error: 'not found',
+      path,
+      method,
+      version: WORKER_VERSION,
+    },
+    404
+  );
 }
 
+// REQUIRED: ES Module Worker entry point for D1.
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     try {
-      return await handle(request, env);
+      return await handle(request, env, ctx);
     } catch (error) {
       console.error('Worker error:', error?.message || error);
       return json(
-        { error: error?.message || String(error), worker: WORKER_VERSION },
+        {
+          error: error?.message || String(error),
+          version: WORKER_VERSION,
+        },
         500
       );
     }
