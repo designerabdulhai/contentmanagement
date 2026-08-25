@@ -1,7 +1,5 @@
 import axios from 'axios';
 
-// Same-origin Vercel API proxy. The Vercel function at /api/[...path].js
-// forwards requests to the Cloudflare Worker without browser CORS issues.
 const baseURL = '/api';
 const TOKEN_KEY = 'content_schedule_auth_token';
 
@@ -24,63 +22,56 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-function errorMessage(data, fallback = 'Request failed') {
-  if (typeof data === 'string' && data.trim()) {
-    return data;
+function toMessage(value) {
+  if (value == null) return '';
+
+  if (typeof value === 'string') {
+    return value.trim();
   }
 
-  if (data && typeof data === 'object') {
-    if (typeof data.error === 'string') return data.error;
-    if (data.error && typeof data.error === 'object') {
-      try {
-        return JSON.stringify(data.error);
-      } catch {
-        return 'API returned an error object';
-      }
+  if (typeof value === 'object') {
+    if (typeof value.error === 'string') {
+      return value.error;
+    }
+
+    if (typeof value.message === 'string') {
+      return value.message;
     }
 
     try {
-      return JSON.stringify(data);
+      return JSON.stringify(value);
     } catch {
-      return fallback;
+      return '';
     }
   }
 
-  return fallback;
+  return String(value);
 }
 
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
+    const url = String(
+      error.config?.url || ''
+    );
 
     if (!error.response) {
       return Promise.reject(
         new Error(
-          `API proxy request failed: ${error.message || 'Failed to fetch'}`
+          `Failed to reach API: ${error.message || 'network error'}`
         )
       );
     }
 
-    const message = errorMessage(
-      error.response.data,
-      error.message || 'Request failed'
-    );
-
-    if (
-      status === 404 &&
-      String(error.config?.url || '').includes('/auth/login')
-    ) {
-      return Promise.reject(
-        new Error(
-          `Login API not found. ${message}`
-        )
-      );
-    }
+    const message =
+      toMessage(error.response.data) ||
+      error.message ||
+      `Request failed (${status})`;
 
     if (
       status === 401 &&
-      !String(error.config?.url || '').includes('/auth/login')
+      !url.includes('/auth/login')
     ) {
       localStorage.removeItem(TOKEN_KEY);
       window.dispatchEvent(
@@ -94,5 +85,9 @@ api.interceptors.response.use(
   }
 );
 
-export { TOKEN_KEY, baseURL };
+export {
+  TOKEN_KEY,
+  baseURL,
+};
+
 export default api;
