@@ -1,0 +1,118 @@
+/* Mobile topbar: keep notification, profile logo and Sign out in the header. */
+
+@media (max-width: 900px) {
+  .topbar-inner {
+    min-height: 58px !important;
+    padding: 8px 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+    overflow: visible !important;
+  }
+
+  .page-title {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .topbar-actions {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 7px !important;
+    position: static !important;
+    margin: 0 !important;
+  }
+
+  .topbar-actions .notify,
+  .topbar-actions .profile,
+  .topbar-actions .topbar-signout {
+    position: static !important;
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+  }
+
+  .topbar-actions .notify {
+    width: 28px !important;
+    height: 32px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .topbar-actions .managers-stack {
+    display: none !important;
+  }
+
+  .topbar-actions .profile {
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .topbar-actions .profile-avatar {
+    width: 34px !important;
+    height: 34px !important;
+    flex: 0 0 34px !important;
+  }
+
+  .topbar-actions .profile-name {
+    display: none !important;
+  }
+
+  .topbar-signout {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 64px !important;
+    height: 34px !important;
+    padding: 0 9px !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 10px !important;
+    background: var(--card) !important;
+    color: var(--text) !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar-inner {
+    min-height: 56px !important;
+    padding-left: 10px !important;
+    padding-right: 8px !important;
+    gap: 6px !important;
+  }
+
+  .topbar-actions {
+    gap: 5px !important;
+  }
+
+  .topbar-actions .notify {
+    width: 24px !important;
+  }
+
+  .topbar-actions .profile-avatar {
+    width: 32px !important;
+    height: 32px !important;
+    flex-basis: 32px !important;
+  }
+
+  .topbar-signout {
+    min-width: 61px !important;
+    height: 32px !important;
+    padding: 0 8px !important;
+    border-radius: 9px !important;
+    font-size: 10px !important;
+  }
+}
