@@ -2,6 +2,12 @@ import React, {useEffect, useMemo, useState} from 'react'
 import api from '../api'
 
 const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'scheduled', label: 'Scheduled' },
+  { key: 'uploaded', label: 'Uploaded' },
+  { key: 'posted', label: 'Posted' },
+];
 
 function monthLabel(date){
   return date.toLocaleDateString(undefined,{month:'long',year:'numeric'});
@@ -16,10 +22,90 @@ function startOfGrid(date){
   return new Date(date.getFullYear(), date.getMonth(), 1-first.getDay());
 }
 
-function formatTime(value){
-  if(!value) return '';
+function toDate(value){
+  if(!value) return null;
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatTime(value){
+  const d = toDate(value);
+  return d ? d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : '';
+}
+
+function formatDateTime(value){
+  const d = toDate(value);
+  return d ? d.toLocaleString([], {
+    month:'short',
+    day:'numeric',
+    hour:'numeric',
+    minute:'2-digit'
+  }) : '';
+}
+
+function statusKey(status){
+  const s = String(status || '').trim().toLowerCase();
+  if(s.includes('upload')) return 'uploaded';
+  if(s.includes('post') || s.includes('publish')) return 'posted';
+  if(s.includes('sched')) return 'scheduled';
+  return '';
+}
+
+function firstDate(post, keys){
+  for(const key of keys){
+    const d = toDate(post?.[key]);
+    if(d) return d;
+  }
+  return null;
+}
+
+function eventForPost(post, filter){
+  const status = statusKey(post?.status);
+  const scheduled = toDate(post?.scheduled_at);
+  const uploaded = firstDate(post, ['uploaded_at', 'uploadedAt']);
+  const posted = firstDate(post, ['posted_at', 'postedAt', 'published_at', 'publishedAt']);
+  const created = firstDate(post, ['created_at', 'createdAt']);
+  const updated = firstDate(post, ['updated_at', 'updatedAt']);
+
+  const candidates = [];
+
+  // Scheduled date always represents the scheduled event.
+  if(scheduled) {
+    candidates.push({
+      type: 'scheduled',
+      date: scheduled,
+      label: 'Scheduled',
+    });
+  }
+
+  // Uploaded uses an explicit uploaded timestamp when available,
+  // otherwise the post update time for uploaded records.
+  if(status === 'uploaded' || uploaded) {
+    const date = uploaded || updated;
+    if(date) {
+      candidates.push({
+        type: 'uploaded',
+        date,
+        label: 'Uploaded',
+      });
+    }
+  }
+
+  // Posted/Published uses an explicit posted timestamp when available,
+  // otherwise created_at as the available post time.
+  if(status === 'posted' || posted) {
+    const date = posted || created;
+    if(date) {
+      candidates.push({
+        type: 'posted',
+        date,
+        label: 'Posted',
+      });
+    }
+  }
+
+  if(filter === 'all') return candidates;
+  return candidates.filter(item => item.type === filter);
 }
 
 export default function CalendarView(){
@@ -27,6 +113,7 @@ export default function CalendarView(){
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filter, setFilter] = useState('all');
 
   const loadPosts = ()=>{
     setLoading(true);
@@ -35,7 +122,7 @@ export default function CalendarView(){
       .then(r=>setPosts(Array.isArray(r.data) ? r.data : []))
       .catch(()=>{
         setPosts([]);
-        setError('Unable to load scheduled posts.');
+        setError('Unable to load calendar posts.');
       })
       .finally(()=>setLoading(false));
   };
@@ -46,7 +133,10 @@ export default function CalendarView(){
     api.get('/posts').then(r=>{
       if(alive) setPosts(Array.isArray(r.data) ? r.data : []);
     }).catch(()=>{
-      if(alive){ setPosts([]); setError('Unable to load scheduled posts.'); }
+      if(alive){
+        setPosts([]);
+        setError('Unable to load calendar posts.');
+      }
     }).finally(()=>{
       if(alive) setLoading(false);
     });
@@ -62,24 +152,38 @@ export default function CalendarView(){
     });
   },[current]);
 
+  const events = useMemo(()=>{
+    const output = [];
+
+    posts.forEach(post=>{
+      eventForPost(post, filter).forEach(event=>{
+        output.push({
+          ...event,
+          post,
+          key: `${post.id}-${event.type}-${event.date.getTime()}`,
+        });
+      });
+    });
+
+    return output;
+  },[posts, filter]);
+
   const byDate = useMemo(()=>{
     const map = {};
-    posts.forEach(post=>{
-      if(!post?.scheduled_at) return;
-      const d = new Date(post.scheduled_at);
-      if(Number.isNaN(d.getTime())) return;
-      const key = dateKey(d);
-      (map[key] ||= []).push(post);
-    });
-    Object.values(map).forEach(items=>items.sort((a,b)=>String(a.scheduled_at||'').localeCompare(String(b.scheduled_at||''))));
-    return map;
-  },[posts]);
 
-  const monthPosts = useMemo(()=>posts.filter(post=>{
-    if(!post?.scheduled_at) return false;
-    const d = new Date(post.scheduled_at);
-    return !Number.isNaN(d.getTime()) && d.getFullYear()===current.getFullYear() && d.getMonth()===current.getMonth();
-  }),[posts,current]);
+    events.forEach(event=>{
+      const key = dateKey(event.date);
+      (map[key] ||= []).push(event);
+    });
+
+    Object.values(map).forEach(items=>items.sort((a,b)=>a.date-b.date));
+    return map;
+  },[events]);
+
+  const monthEvents = useMemo(()=>events.filter(event=>{
+    return event.date.getFullYear() === current.getFullYear() &&
+      event.date.getMonth() === current.getMonth();
+  }),[events,current]);
 
   const goMonth = (delta)=>setCurrent(d=>new Date(d.getFullYear(),d.getMonth()+delta,1));
   const goToday = ()=>setCurrent(new Date());
@@ -89,8 +193,11 @@ export default function CalendarView(){
       <div className="calendar-toolbar">
         <div>
           <h2>Calendar View</h2>
-          <div className="calendar-subtitle">{monthPosts.length} scheduled {monthPosts.length===1?'post':'posts'} this month</div>
+          <div className="calendar-subtitle">
+            {monthEvents.length} {filter === 'all' ? 'calendar' : FILTERS.find(item=>item.key===filter)?.label.toLowerCase()} {monthEvents.length===1?'item':'items'} this month
+          </div>
         </div>
+
         <div className="calendar-controls">
           <button type="button" className="btn-secondary" onClick={goToday}>Today</button>
           <button type="button" className="btn-secondary" onClick={()=>goMonth(-1)} aria-label="Previous month">‹</button>
@@ -98,6 +205,19 @@ export default function CalendarView(){
           <button type="button" className="btn-secondary" onClick={()=>goMonth(1)} aria-label="Next month">›</button>
           <button type="button" className="btn-secondary" onClick={loadPosts}>Refresh</button>
         </div>
+      </div>
+
+      <div className="calendar-filter-bar" style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+        {FILTERS.map(item=>(
+          <button
+            key={item.key}
+            type="button"
+            className={filter === item.key ? 'btn-primary' : 'btn-secondary'}
+            onClick={()=>setFilter(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
 
       {error && <div className="calendar-error">{error}</div>}
@@ -112,23 +232,35 @@ export default function CalendarView(){
           const items = byDate[key] || [];
           const inMonth = day.getMonth() === current.getMonth();
           const isToday = new Date().toDateString() === day.toDateString();
+
           return (
             <div key={key} className={`calendar-day${inMonth?'':' muted'}${isToday?' today':''}`}>
               <div className="calendar-day-head">
                 <div className="calendar-day-number">{day.getDate()}</div>
                 {items.length>0 && <span className="calendar-count">{items.length}</span>}
               </div>
+
               <div className="calendar-items">
-                {items.slice(0,5).map(post=>(
-                  <button key={post.id} type="button" className={`calendar-item ${post.status?.toLowerCase()||''}`} onClick={()=>window.dispatchEvent(new CustomEvent('editPost',{detail:post}))}>
-                    <div className="calendar-item-top">
-                      <span className="calendar-item-title">{post.project_name || '(untitled)'}</span>
-                      <span className="calendar-item-time">{formatTime(post.scheduled_at)}</span>
-                    </div>
-                    {post.content_type ? <small>{post.content_type}</small> : null}
-                    {post.channel || post.platform ? <small>{[post.channel, post.platform].filter(Boolean).join(' • ')}</small> : null}
-                  </button>
-                ))}
+                {items.slice(0,5).map(event=>{
+                  const post = event.post;
+                  return (
+                    <button
+                      key={event.key}
+                      type="button"
+                      className={`calendar-item ${event.type} ${post.status?.toLowerCase()||''}`}
+                      onClick={()=>window.dispatchEvent(new CustomEvent('editPost',{detail:post}))}
+                      title={`${event.label} · ${formatDateTime(event.date)}`}
+                    >
+                      <div className="calendar-item-top">
+                        <span className="calendar-item-title">{post.project_name || '(untitled)'}</span>
+                        <span className="calendar-item-time">{formatTime(event.date)}</span>
+                      </div>
+                      <small className="calendar-item-event-type">{event.label}</small>
+                      {post.content_type ? <small>{post.content_type}</small> : null}
+                      {post.channel || post.platform ? <small>{[post.channel, post.platform].filter(Boolean).join(' • ')}</small> : null}
+                    </button>
+                  );
+                })}
                 {items.length>5 && <div className="calendar-more">+{items.length-5} more</div>}
               </div>
             </div>
