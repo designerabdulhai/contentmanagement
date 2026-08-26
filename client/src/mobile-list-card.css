@@ -1,0 +1,243 @@
+/* Mobile List View — inspired by compact lead-card UI. Desktop is untouched. */
+
+@media (max-width: 900px) {
+  .listview .date-group {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .listview .date-group-header {
+    background: transparent;
+    border: 0;
+    padding: 10px 3px 8px;
+  }
+
+  .listview .date-group-header h3 {
+    font-size: 14px;
+    margin: 0;
+  }
+
+  .listview .date-group-header span {
+    font-size: 11px;
+  }
+
+  .listview .date-group-table {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    background: var(--card) !important;
+    box-shadow: 0 5px 18px rgba(15,23,42,.05) !important;
+  }
+
+  .listview .date-group-table .posts,
+  .listview > .table-wrap .posts {
+    width: 100% !important;
+    min-width: 0 !important;
+    display: block !important;
+  }
+
+  .listview .date-group-table .posts thead,
+  .listview > .table-wrap .posts thead { display: none !important; }
+
+  .listview .date-group-table .posts tbody,
+  .listview > .table-wrap .posts tbody { display: block !important; }
+
+  .listview .date-group-table .posts tbody tr,
+  .listview > .table-wrap .posts tbody tr {
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+    gap: 0 10px !important;
+    padding: 16px !important;
+    border: 0 !important;
+    border-top: 1px solid var(--border) !important;
+    background: var(--card) !important;
+  }
+
+  .listview .date-group-table .posts tbody tr:first-child,
+  .listview > .table-wrap .posts tbody tr:first-child { border-top: 0 !important; }
+
+  .listview .date-group-table .posts td,
+  .listview > .table-wrap .posts td {
+    min-width: 0 !important;
+    width: auto !important;
+    overflow: visible !important;
+    border: 0 !important;
+    padding: 0 !important;
+    font-size: 12px !important;
+    line-height: 1.3 !important;
+    color: var(--text) !important;
+  }
+
+  /* Project */
+  .listview .posts td:nth-child(1) {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    font-size: 18px !important;
+    font-weight: 800 !important;
+    letter-spacing: -.02em;
+    padding-bottom: 10px !important;
+  }
+  .listview .posts td:nth-child(1)::before { display:none !important; }
+
+  /* Metadata chips */
+  .listview .posts td:nth-child(2),
+  .listview .posts td:nth-child(3),
+  .listview .posts td:nth-child(4) {
+    grid-row: 2;
+    display: inline-flex !important;
+    width: max-content !important;
+    max-width: 31% !important;
+    min-height: 30px !important;
+    margin: 0 6px 10px 0 !important;
+    padding: 6px 10px !important;
+    border-radius: 999px !important;
+    border: 1px solid var(--border) !important;
+    background: var(--bg) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+  }
+  .listview .posts td:nth-child(2)::before,
+  .listview .posts td:nth-child(3)::before,
+  .listview .posts td:nth-child(4)::before { display:none !important; }
+
+  /* Status + time */
+  .listview .posts td:nth-child(5) {
+    grid-column: 1;
+    grid-row: 3;
+    padding-bottom: 10px !important;
+  }
+  .listview .posts td:nth-child(5)::before { display:none !important; }
+  .listview .posts td:nth-child(5) .inline-status {
+    width: auto !important;
+    min-width: 104px !important;
+    height: 32px !important;
+    padding: 0 22px 0 11px !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    font-size: 11px !important;
+  }
+
+  .listview .posts td:nth-child(6) {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: center;
+    justify-self: end;
+    color: var(--muted) !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    padding-bottom: 10px !important;
+  }
+  .listview .posts td:nth-child(6)::before { display:none !important; }
+
+  /* Link + open/copy controls */
+  .listview .posts td:nth-child(7) {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    min-height: 42px !important;
+    padding-top: 10px !important;
+    border-top: 1px solid var(--border) !important;
+  }
+  .listview .posts td:nth-child(7)::before {
+    content: 'Link';
+    display: block !important;
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .listview .posts td:nth-child(7) > div {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    gap: 7px !important;
+  }
+  .listview .posts td:nth-child(7) .link-text {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    display: block !important;
+    color: var(--muted) !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  .listview .posts td:nth-child(7) .link-actions {
+    flex: 0 0 auto !important;
+    display: flex !important;
+    gap: 5px !important;
+  }
+  .listview .posts td:nth-child(7) .link-actions .icon-btn {
+    width: 34px !important;
+    height: 34px !important;
+    margin: 0 !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 10px !important;
+    background: var(--bg) !important;
+    color: var(--text) !important;
+  }
+
+  /* Owner + actions */
+  .listview .posts td:nth-child(8) {
+    grid-column: 1;
+    grid-row: 5;
+    padding-top: 11px !important;
+    color: var(--muted) !important;
+    font-size: 11px !important;
+  }
+  .listview .posts td:nth-child(8)::before {
+    content: 'Owner';
+    display: block !important;
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+
+  .listview .posts td:nth-child(9) {
+    grid-column: 2;
+    grid-row: 5;
+    display: flex !important;
+    align-items: flex-end !important;
+    justify-content: flex-end !important;
+    gap: 4px !important;
+    padding-top: 8px !important;
+  }
+  .listview .posts td:nth-child(9)::before { display:none !important; }
+  .listview .posts td:nth-child(9) button {
+    width: 34px !important;
+    height: 34px !important;
+    margin: 0 !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 10px !important;
+    background: var(--bg) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .listview .posts tbody tr { padding: 15px !important; }
+  .listview .posts td:nth-child(1) { font-size: 17px !important; }
+  .listview .posts td:nth-child(2),
+  .listview .posts td:nth-child(3),
+  .listview .posts td:nth-child(4) { font-size: 9px !important; padding: 5px 8px !important; }
+  .listview .posts td:nth-child(7) .link-actions .icon-btn,
+  .listview .posts td:nth-child(9) button { width: 32px !important; height: 32px !important; }
+}
