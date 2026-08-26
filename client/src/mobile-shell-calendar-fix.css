@@ -1,0 +1,224 @@
+/* Mobile shell + calendar containment fixes. Desktop remains unchanged. */
+@media (max-width: 900px) {
+  .main-area {
+    width: 100% !important;
+    height: 100vh !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .topbar-inner {
+    position: relative !important;
+    z-index: 1000 !important;
+    flex: 0 0 56px !important;
+    width: 100% !important;
+    height: 56px !important;
+    min-height: 56px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+  }
+
+  .topbar-actions {
+    position: relative !important;
+    z-index: 1001 !important;
+  }
+
+  .topbar-signout {
+    position: static !important;
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+    z-index: 1002 !important;
+  }
+
+  .profile,
+  .profile-avatar,
+  .notify {
+    flex: 0 0 auto !important;
+  }
+
+  .main-content {
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: calc(100vh - 114px) !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    position: relative !important;
+    z-index: 1 !important;
+  }
+
+  .calendar {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .calendar-toolbar,
+  .calendar-filter-bar,
+  .calendar-weekdays,
+  .calendar-grid {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .calendar-toolbar {
+    overflow: hidden !important;
+  }
+
+  .calendar-controls {
+    width: 100% !important;
+    min-width: 0 !important;
+    grid-template-columns: minmax(0,1fr) 34px minmax(0,1.25fr) 34px minmax(0,1fr) !important;
+  }
+
+  .calendar-controls > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .calendar-month {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .calendar-filter-bar {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    flex-wrap: nowrap !important;
+    scrollbar-width: none !important;
+  }
+  .calendar-filter-bar::-webkit-scrollbar { display: none !important; }
+
+  .calendar-weekdays,
+  .calendar-grid {
+    overflow: hidden !important;
+    display: grid !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  }
+
+  .calendar-weekdays > div {
+    min-width: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .calendar-day {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .calendar-items,
+  .calendar-item {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .calendar-item-top {
+    min-width: 0 !important;
+    width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .calendar-item-title,
+  .calendar-item-time,
+  .calendar-item small {
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar-inner {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .topbar-actions {
+    gap: 7px !important;
+  }
+
+  .notify {
+    width: 24px !important;
+    height: 30px !important;
+  }
+
+  .profile-avatar {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  .topbar-signout {
+    height: 32px !important;
+    padding: 0 9px !important;
+    font-size: 10px !important;
+  }
+
+  .calendar-toolbar {
+    padding: 10px !important;
+    gap: 9px !important;
+  }
+
+  .calendar-controls {
+    grid-template-columns: minmax(0,1fr) 32px minmax(0,1.3fr) 32px minmax(0,1fr) !important;
+    gap: 5px !important;
+  }
+
+  .calendar-controls .btn-secondary {
+    min-height: 34px !important;
+    padding: 0 4px !important;
+    font-size: 10px !important;
+  }
+
+  .calendar-grid,
+  .calendar-weekdays {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  }
+
+  .calendar-day {
+    min-height: 92px !important;
+    padding: 4px !important;
+  }
+
+  .calendar-day-number {
+    font-size: 11px !important;
+  }
+
+  .calendar-count {
+    font-size: 9px !important;
+  }
+
+  .calendar-item {
+    padding: 4px !important;
+    border-radius: 6px !important;
+  }
+
+  .calendar-item-title {
+    font-size: 8px !important;
+  }
+
+  .calendar-item-time,
+  .calendar-item-event-type,
+  .calendar-item small {
+    font-size: 7px !important;
+  }
+}
