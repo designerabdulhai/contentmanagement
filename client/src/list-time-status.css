@@ -1,0 +1,5 @@
+/* Show only the time that matches the current post status. */
+.posts tr:has(.inline-status.scheduled) .post-time-stack span:not(:first-child){display:none}
+.posts tr:has(.inline-status.uploaded) .post-time-stack span:not(:only-child):not(:nth-child(2)){display:none}
+.posts tr:has(.inline-status.uploaded) .post-time-stack span:nth-child(2){display:inline}
+.posts tr:has(.inline-status.posted) .post-time-stack span:not(:last-child){display:none}
