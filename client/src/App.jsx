@@ -105,8 +105,7 @@ export default function App(){
     <div className="app-root layout-root">
       <Sidebar route={route} setRoute={navigate} theme={theme} setTheme={setTheme} />
       <div className="main-area">
-        <Topbar title={route==='dashboard'? 'Dashboard' : route==='list'? 'All Posts' : route==='settings'? 'Settings' : 'Calendar'} managers={managers} profile={profile} />
-        <button className="logout-button" onClick={logout} type="button">Sign out</button>
+        <Topbar title={route==='dashboard'? 'Dashboard' : route==='list'? 'All Posts' : route==='settings'? 'Settings' : 'Calendar'} managers={managers} profile={profile} onLogout={logout} />
         <main className="main-content">
           {route==='dashboard' && <Dashboard />}
           {route==='list' && <ListView />}
