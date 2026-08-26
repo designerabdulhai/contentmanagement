@@ -6,6 +6,7 @@ import CalendarView from './pages/CalendarView'
 import Login from './pages/Login'
 import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
+import PostForm from './components/PostForm'
 import api, { TOKEN_KEY } from './api'
 
 const defaultProfile = { name: 'Owner Name', email: '', photo: '' };
@@ -27,6 +28,7 @@ export default function App(){
   const [theme, setTheme] = useState('light');
   const [profile, setProfile] = useState(defaultProfile);
   const [modalRequest, setModalRequest] = useState(null);
+  const [editingPost, setEditingPost] = useState(null);
 
   const navigate = (nextRoute) => {
     const safeRoute = ROUTES.has(nextRoute) ? nextRoute : 'dashboard';
@@ -51,10 +53,26 @@ export default function App(){
   useEffect(()=>{
     const onProfileUpdated = (e) => setProfile(e.detail || defaultProfile);
     const onAuthExpired = () => setUser(null);
+    const onEditPost = (e) => {
+      if(!e.detail?.id) return;
+      navigate('list');
+      setEditingPost(e.detail);
+    };
     window.addEventListener('profileUpdated', onProfileUpdated);
     window.addEventListener('authExpired', onAuthExpired);
-    return ()=>{ window.removeEventListener('profileUpdated', onProfileUpdated); window.removeEventListener('authExpired', onAuthExpired); };
+    window.addEventListener('editPost', onEditPost);
+    return ()=>{
+      window.removeEventListener('profileUpdated', onProfileUpdated);
+      window.removeEventListener('authExpired', onAuthExpired);
+      window.removeEventListener('editPost', onEditPost);
+    };
   },[])
+
+  useEffect(()=>{
+    if(!editingPost) return;
+    const timer = window.setTimeout(()=>window.dispatchEvent(new CustomEvent('editPost',{detail:editingPost})), 0);
+    return ()=>window.clearTimeout(timer);
+  },[editingPost]);
 
   useEffect(()=>{
     const requestPost = () => { navigate('list'); setModalRequest('post'); };
@@ -113,6 +131,14 @@ export default function App(){
           {route==='calendar' && <CalendarView />}
         </main>
       </div>
+      <style>{`table.posts th:nth-child(7), table.posts td:nth-child(7){display:none !important;}`}</style>
+      {editingPost && (
+        <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPost(null)}}>
+          <div className="modal create-post-modal" role="dialog" aria-modal="true">
+            <PostForm onSaved={()=>{setEditingPost(null); window.location.reload()}} onCancel={()=>setEditingPost(null)} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
