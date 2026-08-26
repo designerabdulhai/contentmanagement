@@ -42,23 +42,12 @@ function firstDate(post, keys, assumeUtc=false){
 function getPostEvents(post){
   const status = statusKey(post?.status);
   const scheduled = firstDate(post, ['scheduled_at'], false);
-  const uploaded = firstDate(post, ['uploaded_at','uploadedAt','upload_time','uploadTime','uploaded_time','uploadedTime','upload_at','uploadAt'], true);
-  const posted = firstDate(post, ['posted_at','postedAt','published_at','publishedAt','post_time','postTime','published_time','publishedTime'], true);
-  const created = firstDate(post, ['created_at','createdAt'], true);
-  const updated = firstDate(post, ['updated_at','updatedAt'], true);
-  if(status === 'uploaded'){
-    const date = uploaded || updated;
-    return date ? [{type:'uploaded',label:'Uploaded',date}] : [];
-  }
+  // The form stores the user-selected Schedule Date & Time in scheduled_at.
+  // Do not use server-created/updated/uploaded timestamps for the displayed post time.
+  if(status === 'uploaded') return scheduled ? [{type:'uploaded',label:'Uploaded',date:scheduled}] : [];
   if(status === 'scheduled') return scheduled ? [{type:'scheduled',label:'Scheduled',date:scheduled}] : [];
-  if(status === 'posted'){
-    const date = posted || updated || created;
-    return date ? [{type:'posted',label:'Posted',date}] : [];
-  }
-  if(status === 'listed'){
-    const date = created || updated;
-    return date ? [{type:'listed',label:'Listed',date}] : [];
-  }
+  if(status === 'posted') return scheduled ? [{type:'posted',label:'Posted',date:scheduled}] : [];
+  if(status === 'listed') return scheduled ? [{type:'listed',label:'Listed',date:scheduled}] : [];
   return [];
 }
 function displayDate(post){ return getPostEvents(post)[0]?.date || null; }
