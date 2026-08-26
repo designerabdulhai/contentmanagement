@@ -6,9 +6,19 @@ import LinkActions from '../components/LinkActions'
 const STATUS_OPTIONS = ['Listed','Scheduled','Uploaded'];
 const TOKEN_KEY = 'content_schedule_auth_token';
 
-function toDate(value){
+// Database-generated timestamps are UTC. Scheduled_at is a user-entered
+// Bangladesh local datetime and is intentionally parsed as local time.
+function toDate(value, assumeUtc=false){
   if(!value) return null;
-  const d = value instanceof Date ? value : new Date(value);
+  if(value instanceof Date){
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  let raw = String(value).trim();
+  if(!raw) return null;
+  // SQLite/Worker timestamps can arrive without an offset. Treat those
+  // server-generated timestamps as UTC instead of browser-local time.
+  if(assumeUtc && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw)) raw = raw.replace(' ','T') + 'Z';
+  const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
@@ -37,9 +47,9 @@ function statusKey(status){
   return '';
 }
 
-function firstDate(post, keys){
+function firstDate(post, keys, assumeUtc=false){
   for(const key of keys){
-    const d = toDate(post?.[key]);
+    const d = toDate(post?.[key], assumeUtc);
     if(d) return d;
   }
   return null;
@@ -47,24 +57,25 @@ function firstDate(post, keys){
 
 function getPostEvents(post){
   const status = statusKey(post?.status);
-  const scheduled = firstDate(post, ['scheduled_at']);
+  // scheduled_at comes from datetime-local and represents Bangladesh local time.
+  const scheduled = firstDate(post, ['scheduled_at'], false);
+  // uploaded/posted/created/updated timestamps are server/database timestamps.
   const uploaded = firstDate(post, [
     'uploaded_at','uploadedAt',
     'upload_time','uploadTime',
     'uploaded_time','uploadedTime',
     'upload_at','uploadAt',
-  ]);
+  ], true);
   const posted = firstDate(post, [
     'posted_at','postedAt',
     'published_at','publishedAt',
     'post_time','postTime',
     'published_time','publishedTime',
-  ]);
-  const created = firstDate(post, ['created_at','createdAt']);
-  const updated = firstDate(post, ['updated_at','updatedAt']);
+  ], true);
+  const created = firstDate(post, ['created_at','createdAt'], true);
+  const updated = firstDate(post, ['updated_at','updatedAt'], true);
 
-  // The list should show only the date/time relevant to the CURRENT status.
-  // Uploaded posts use their upload timestamp; scheduled posts use scheduled_at.
+  // The list shows only the date/time relevant to the CURRENT status.
   if(status === 'uploaded'){
     const date = uploaded || updated;
     return date ? [{type:'uploaded', label:'Uploaded', date}] : [];
@@ -274,13 +285,12 @@ export default function ListView(){
               <div className="date-group-header"><div><h3>{day}</h3><span>{items.length} {items.length===1?'post':'posts'}</span></div></div>
               <div className="table-wrap card date-group-table">
                 <table className="posts">
-                  <thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Time</th><th>Uploaded Link</th><th>Owner</th><th>Actions</th></tr></thead>
+                  <thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Time</th><th>Owner</th><th>Actions</th></tr></thead>
                   <tbody>{items.map(p=>(
                     <tr key={p.id}>
                       <td>{p.project_name}</td><td>{p.content_type}</td><td>{p.channel}</td><td>{p.platform}</td>
                       <td><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select></td>
                       <td><PostTimes post={p}/></td>
-                      <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link}/></div></td>
                       <td>{p.owner}</td>
                       {actionButtons(p)}
                     </tr>
@@ -294,13 +304,12 @@ export default function ListView(){
       ) : (
         <div className="table-wrap card">
           <table className="posts">
-            <thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Date / Time</th><th>Uploaded Link</th><th>Owner</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Date / Time</th><th>Owner</th><th>Actions</th></tr></thead>
             <tbody>{filteredPosts.map(p=>(
               <tr key={p.id}>
                 <td>{p.project_name}</td><td>{p.content_type}</td><td>{p.channel}</td><td>{p.platform}</td>
                 <td><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select></td>
                 <td><PostTimes post={p}/></td>
-                <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link}/></div></td>
                 <td>{p.owner}</td>{actionButtons(p)}
               </tr>
             ))}</tbody>
