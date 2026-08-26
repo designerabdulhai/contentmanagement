@@ -30,15 +30,15 @@
   .listview .date-group-table .posts tbody,
   .listview > .table-wrap .posts tbody { display: block !important; width: 100% !important; }
 
-  /* Card */
   .listview .date-group-table .posts tbody tr,
   .listview > .table-wrap .posts tbody tr {
+    position: relative !important;
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) auto !important;
     grid-template-areas:
-      "title links"
+      "title title"
       "meta meta"
-      "status time"
+      "time time"
       "owner actions" !important;
     gap: 10px 10px !important;
     width: 100% !important;
@@ -73,7 +73,7 @@
   .listview .date-group-table .posts td::before,
   .listview > .table-wrap .posts td::before { display: none !important; content: none !important; }
 
-  /* 1 — title */
+  /* Project title */
   .listview .posts td:nth-child(1) {
     grid-area: title !important;
     align-self: center !important;
@@ -81,42 +81,74 @@
     font-weight: 800 !important;
     color: var(--text) !important;
     letter-spacing: -.02em !important;
+    padding-right: 190px !important;
   }
 
-  /* 7 — Open + Copy, top right */
+  /* Top-right status + link controls */
+  .listview .posts td:nth-child(5) {
+    position: absolute !important;
+    top: 14px !important;
+    right: 92px !important;
+    z-index: 2 !important;
+    display: block !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .listview .posts td:nth-child(5) .inline-status {
+    width: auto !important;
+    min-width: 92px !important;
+    max-width: 125px !important;
+    height: 34px !important;
+    padding: 0 22px 0 11px !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    font-size: 10.5px !important;
+    line-height: 34px !important;
+  }
+
   .listview .posts td:nth-child(7) {
-    grid-area: links !important;
-    justify-self: end !important;
-    align-self: start !important;
+    position: absolute !important;
+    top: 13px !important;
+    right: 13px !important;
+    z-index: 3 !important;
     display: flex !important;
     width: auto !important;
     min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
+
   .listview .posts td:nth-child(7) > div {
     display: flex !important;
     align-items: center !important;
     justify-content: flex-end !important;
-    gap: 6px !important;
+    gap: 5px !important;
     width: auto !important;
     min-width: 0 !important;
   }
+
   .listview .posts td:nth-child(7) .link-text { display: none !important; }
-  .listview .posts td:nth-child(7) .link-actions { display: flex !important; gap: 6px !important; }
+  .listview .posts td:nth-child(7) .link-actions { display: flex !important; gap: 5px !important; }
+
   .listview .posts td:nth-child(7) .link-actions .icon-btn {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    width: 36px !important;
-    height: 36px !important;
+    width: 34px !important;
+    height: 34px !important;
     padding: 0 !important;
     margin: 0 !important;
     border: 1px solid var(--border) !important;
     border-radius: 50% !important;
     background: #f2f4f7 !important;
     color: var(--text) !important;
+    box-shadow: none !important;
   }
 
-  /* Metadata are inside one visual row. The cells remain separate for desktop/table semantics. */
+  /* Metadata row */
   .listview .posts td:nth-child(2),
   .listview .posts td:nth-child(3),
   .listview .posts td:nth-child(4) {
@@ -124,10 +156,8 @@
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    justify-self: start !important;
-    align-self: center !important;
     width: max-content !important;
-    max-width: calc(33.333% - 5px) !important;
+    max-width: 31% !important;
     min-width: 0 !important;
     height: 30px !important;
     box-sizing: border-box !important;
@@ -145,36 +175,14 @@
     text-overflow: ellipsis !important;
   }
 
-  /* Force three chips across without transforms or accidental positioning. */
-  .listview .posts td:nth-child(2) { grid-column: 1 !important; grid-row: 2 !important; }
-  .listview .posts td:nth-child(3) { grid-column: 1 !important; grid-row: 2 !important; margin-left: 4px !important; transform: none !important; }
-  .listview .posts td:nth-child(4) { grid-column: 1 !important; grid-row: 2 !important; margin-left: 8px !important; transform: none !important; }
+  .listview .posts td:nth-child(2) { grid-column: 1 !important; grid-row: 2 !important; justify-self: start !important; }
+  .listview .posts td:nth-child(3) { grid-column: 1 !important; grid-row: 2 !important; justify-self: center !important; }
+  .listview .posts td:nth-child(4) { grid-column: 1 !important; grid-row: 2 !important; justify-self: end !important; }
 
-  .listview .posts td:nth-child(2) { justify-self: start !important; }
-  .listview .posts td:nth-child(3) { justify-self: center !important; }
-  .listview .posts td:nth-child(4) { justify-self: end !important; }
-
-  /* 5 — status / 6 — time */
-  .listview .posts td:nth-child(5) {
-    grid-area: status !important;
-    justify-self: start !important;
-    align-self: center !important;
-  }
-  .listview .posts td:nth-child(5) .inline-status {
-    width: auto !important;
-    min-width: 106px !important;
-    max-width: 150px !important;
-    height: 34px !important;
-    padding: 0 24px 0 12px !important;
-    border: 0 !important;
-    border-radius: 999px !important;
-    font-size: 11px !important;
-    line-height: 34px !important;
-  }
-
+  /* Time */
   .listview .posts td:nth-child(6) {
     grid-area: time !important;
-    justify-self: end !important;
+    justify-self: start !important;
     align-self: center !important;
     color: var(--muted) !important;
     font-size: 12px !important;
@@ -182,7 +190,7 @@
     white-space: nowrap !important;
   }
 
-  /* 8 — owner / 9 — edit duplicate delete */
+  /* Owner */
   .listview .posts td:nth-child(8) {
     grid-area: owner !important;
     align-self: center !important;
@@ -200,6 +208,7 @@
     letter-spacing: .08em !important;
   }
 
+  /* Bottom edit / duplicate / delete actions */
   .listview .posts td:nth-child(9) {
     grid-area: actions !important;
     display: flex !important;
@@ -207,6 +216,7 @@
     justify-content: flex-end !important;
     gap: 4px !important;
   }
+
   .listview .posts td:nth-child(9) button {
     display: inline-flex !important;
     align-items: center !important;
@@ -225,11 +235,13 @@
 @media (max-width: 520px) {
   .listview .date-group-table .posts tbody tr,
   .listview > .table-wrap .posts tbody tr { padding: 15px !important; border-radius: 16px !important; }
-  .listview .posts td:nth-child(1) { font-size: 17px !important; }
+  .listview .posts td:nth-child(1) { font-size: 17px !important; padding-right: 180px !important; }
+  .listview .posts td:nth-child(5) { right: 88px !important; }
+  .listview .posts td:nth-child(5) .inline-status { min-width: 90px !important; font-size: 10px !important; }
+  .listview .posts td:nth-child(7) { right: 11px !important; }
+  .listview .posts td:nth-child(7) .link-actions .icon-btn,
+  .listview .posts td:nth-child(9) button { width: 32px !important; height: 32px !important; }
   .listview .posts td:nth-child(2),
   .listview .posts td:nth-child(3),
   .listview .posts td:nth-child(4) { font-size: 9px !important; padding-left: 9px !important; padding-right: 9px !important; }
-  .listview .posts td:nth-child(5) .inline-status { min-width: 92px !important; font-size: 10px !important; }
-  .listview .posts td:nth-child(7) .link-actions .icon-btn,
-  .listview .posts td:nth-child(9) button { width: 32px !important; height: 32px !important; }
 }
