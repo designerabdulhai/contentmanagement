@@ -59,48 +59,63 @@ function firstDate(post, keys){
   return null;
 }
 
+function firstDateKey(post, keys){
+  for(const key of keys){
+    const d = toDate(post?.[key]);
+    if(d) return key;
+  }
+  return null;
+}
+
 function eventForPost(post, filter){
   const status = statusKey(post?.status);
-  const scheduled = toDate(post?.scheduled_at);
-  const uploaded = firstDate(post, ['uploaded_at', 'uploadedAt']);
-  const posted = firstDate(post, ['posted_at', 'postedAt', 'published_at', 'publishedAt']);
-  const created = firstDate(post, ['created_at', 'createdAt']);
-  const updated = firstDate(post, ['updated_at', 'updatedAt']);
+  const scheduled = firstDate(post, ['scheduled_at']);
+  const uploadedKey = firstDateKey(post, [
+    'uploaded_at','uploadedAt',
+    'upload_time','uploadTime',
+    'uploaded_time','uploadedTime',
+    'upload_at','uploadAt',
+  ]);
+  const uploaded = uploadedKey ? toDate(post?.[uploadedKey]) : null;
+  const postedKey = firstDateKey(post, [
+    'posted_at','postedAt',
+    'published_at','publishedAt',
+    'post_time','postTime',
+    'published_time','publishedTime',
+  ]);
+  const posted = postedKey ? toDate(post?.[postedKey]) : null;
+  const created = firstDate(post, ['created_at','createdAt']);
+  const updated = firstDate(post, ['updated_at','updatedAt']);
 
-  const candidates = [];
-
-  if(scheduled) {
-    candidates.push({
-      type: 'scheduled',
-      date: scheduled,
-      label: 'Scheduled',
-    });
-  }
-
-  if(status === 'uploaded' || uploaded) {
-    const date = uploaded || updated;
-    if(date) {
-      candidates.push({
-        type: 'uploaded',
-        date,
-        label: 'Uploaded',
-      });
+  // Calendar represents the post's current lifecycle state. A scheduled
+  // timestamp should not create a second calendar item for a post that is
+  // already uploaded/posted. Likewise, uploaded/posted states should use
+  // their lifecycle timestamp instead of falling back to scheduled_at.
+  const currentEvent = (() => {
+    if(status === 'uploaded') {
+      const date = uploaded || updated || created;
+      return date ? { type:'uploaded', date, label:'Uploaded' } : null;
     }
-  }
 
-  if(status === 'posted' || posted) {
-    const date = posted || created;
-    if(date) {
-      candidates.push({
-        type: 'posted',
-        date,
-        label: 'Posted',
-      });
+    if(status === 'posted') {
+      const date = posted || updated || created;
+      return date ? { type:'posted', date, label:'Posted' } : null;
     }
-  }
 
-  if(filter === 'all') return candidates;
-  return candidates.filter(item => item.type === filter);
+    if(status === 'scheduled') {
+      return scheduled ? { type:'scheduled', date:scheduled, label:'Scheduled' } : null;
+    }
+
+    // For legacy/unknown status values, prefer the explicitly recorded
+    // lifecycle timestamp, then the scheduled timestamp.
+    if(posted) return { type:'posted', date:posted, label:'Posted' };
+    if(uploaded) return { type:'uploaded', date:uploaded, label:'Uploaded' };
+    if(scheduled) return { type:'scheduled', date:scheduled, label:'Scheduled' };
+    return null;
+  })();
+
+  if(filter === 'all') return currentEvent ? [currentEvent] : [];
+  return currentEvent?.type === filter ? [currentEvent] : [];
 }
 
 export default function CalendarView(){
