@@ -4,6 +4,7 @@ import App from './App'
 import BulkCreate from './components/BulkCreate'
 import './styles.css'
 import './post-form-fix.css'
+import './mobile-responsive.css'
 
 createRoot(document.getElementById('root')).render(
   React.createElement(App)
