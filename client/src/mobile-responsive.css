@@ -135,43 +135,32 @@
   .invite { grid-template-columns:1fr; }
   .invite button { width:100%; }
 
-  /* =======================================================
-     LIST — mobile card layout instead of a clipped table
-  ======================================================= */
-  .listview .list-header {
-    gap:10px;
-  }
-
+  .listview .list-header { gap:10px; }
   .listview .list-header > div:first-child {
     display:grid !important;
     grid-template-columns:1fr 1fr;
     gap:8px !important;
     width:100%;
   }
-
   .listview .list-header > div:first-child .search {
     grid-column:1/-1;
     width:100%;
     min-height:44px;
   }
-
   .listview .list-header > div:first-child > button {
     width:100%;
     min-height:40px;
   }
-
   .listview .list-actions {
     display:grid;
     grid-template-columns:repeat(3,minmax(0,1fr));
     gap:8px;
   }
-
   .listview .list-actions .btn-primary {
     grid-column:1/-1;
     width:100%;
     min-height:42px;
   }
-
   .listview > div[style*="justify-content:flex-end"] {
     justify-content:flex-start !important;
     overflow-x:auto;
@@ -179,24 +168,16 @@
     -webkit-overflow-scrolling:touch;
     padding-bottom:2px;
   }
-
   .listview > div[style*="justify-content:flex-end"] button {
     flex:0 0 auto;
     white-space:nowrap;
   }
 
-  .date-groups {
-    gap:10px;
-  }
-
-  .date-group {
-    border-radius:12px;
-    overflow:hidden;
-  }
-
-  .date-group-header {
-    padding:12px 13px;
-  }
+  .date-groups { gap:10px; }
+  .date-group { border-radius:12px; overflow:hidden; }
+  .date-group-header { padding:12px 13px; }
+  .date-group-header h3 { font-size:14px; }
+  .date-group-header span { font-size:11px; }
 
   .date-group-table {
     margin:0 !important;
@@ -214,57 +195,46 @@
     display:block;
     border-collapse:separate;
   }
-
   .date-group-table .posts thead,
-  .listview > .table-wrap .posts thead {
-    display:none;
-  }
-
+  .listview > .table-wrap .posts thead { display:none; }
   .date-group-table .posts tbody,
-  .listview > .table-wrap .posts tbody {
-    display:block;
-    width:100%;
-  }
+  .listview > .table-wrap .posts tbody { display:block; width:100%; }
 
   .date-group-table .posts tbody tr,
   .listview > .table-wrap .posts tbody tr {
     display:grid;
     grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-    gap:0;
+    gap:0 10px;
     width:100%;
-    padding:10px 12px 12px;
+    padding:12px 13px 11px;
     border-top:1px solid var(--border);
     background:var(--card);
   }
-
   .date-group-table .posts tbody tr:first-child,
-  .listview > .table-wrap .posts tbody tr:first-child {
-    border-top:0;
-  }
+  .listview > .table-wrap .posts tbody tr:first-child { border-top:0; }
 
   .date-group-table .posts td,
   .listview > .table-wrap .posts td {
     min-width:0;
     width:auto;
-    padding:7px 6px;
+    padding:6px 4px;
     border:0;
     overflow:hidden;
     word-break:break-word;
     color:var(--text);
-    font-size:13px;
+    font-size:12px;
+    line-height:1.3;
   }
-
   .date-group-table .posts td::before,
   .listview > .table-wrap .posts td::before {
     display:block;
     margin-bottom:3px;
     color:var(--muted);
-    font-size:10px;
-    font-weight:700;
+    font-size:9px;
+    font-weight:800;
     text-transform:uppercase;
-    letter-spacing:.03em;
+    letter-spacing:.08em;
   }
-
   .date-group-table .posts td:nth-child(1)::before,
   .listview > .table-wrap .posts td:nth-child(1)::before { content:'Project'; }
   .date-group-table .posts td:nth-child(2)::before,
@@ -284,169 +254,107 @@
   .date-group-table .posts td:nth-child(9)::before,
   .listview > .table-wrap .posts td:nth-child(9)::before { content:'Actions'; }
 
-  /* Project gets the full first row; actions get the full last row. */
   .date-group-table .posts td:nth-child(1),
   .listview > .table-wrap .posts td:nth-child(1) {
     grid-column:1/-1;
-    font-weight:700;
+    font-weight:800;
     font-size:15px;
-    padding-top:4px;
+    padding-top:2px;
+    padding-bottom:7px;
   }
-
-  .date-group-table .posts td:nth-child(1)::before,
-  .listview > .table-wrap .posts td:nth-child(1)::before {
-    font-size:10px;
-    font-weight:700;
-  }
-
   .date-group-table .posts td:nth-child(5) .inline-status,
   .listview > .table-wrap .posts td:nth-child(5) .inline-status {
     width:100%;
     min-width:0;
     max-width:100%;
-    height:34px;
+    height:35px;
+    font-size:11px;
+    padding-left:10px;
   }
-
+  .date-group-table .posts td:nth-child(6),
+  .listview > .table-wrap .posts td:nth-child(6) { grid-column:1; }
   .date-group-table .posts td:nth-child(7),
-  .listview > .table-wrap .posts td:nth-child(7) {
-    grid-column:1/-1;
-  }
-
-  .date-group-table .posts td:nth-child(7) .link-text,
-  .listview > .table-wrap .posts td:nth-child(7) .link-text {
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    max-width:100%;
-  }
-
+  .listview > .table-wrap .posts td:nth-child(7) { grid-column:1/-1; }
+  .date-group-table .posts td:nth-child(8),
+  .listview > .table-wrap .posts td:nth-child(8) { grid-column:1; }
   .date-group-table .posts td:nth-child(9),
   .listview > .table-wrap .posts td:nth-child(9) {
-    grid-column:1/-1;
+    grid-column:2;
+    grid-row:auto;
     display:flex;
-    align-items:center;
+    flex-direction:row;
+    align-items:flex-end;
     justify-content:flex-end;
-    padding-top:6px;
+    gap:2px;
+    padding-top:7px;
   }
-
   .date-group-table .posts td:nth-child(9)::before,
   .listview > .table-wrap .posts td:nth-child(9)::before {
     margin-right:auto;
-    margin-bottom:0;
+    margin-bottom:2px;
   }
-
+  .date-group-table .posts td:nth-child(7) > div,
+  .listview > .table-wrap .posts td:nth-child(7) > div {
+    width:100%;
+    min-width:0;
+  }
+  .date-group-table .posts .link-text,
+  .listview > .table-wrap .posts .link-text {
+    max-width:100%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
   .date-group-table .posts td:nth-child(9) button,
   .listview > .table-wrap .posts td:nth-child(9) button {
-    width:36px;
-    height:36px;
-    margin-right:4px;
+    width:32px;
+    height:32px;
+    margin:0;
   }
 
-  .listview .empty-state {
-    margin-bottom:0;
-  }
-
-  .table-wrap {
-    overflow:visible;
-    -webkit-overflow-scrolling:touch;
-  }
+  .table-wrap { overflow:visible; }
 
   .calendar-toolbar { gap:10px; padding:12px; }
   .calendar-toolbar > div:first-child { text-align:left; }
-  .calendar-controls {
-    display:grid;
-    grid-template-columns:repeat(4,minmax(0,1fr));
-    gap:6px;
-  }
-  .calendar-controls .calendar-month {
-    grid-column:1/-1;
-    order:-1;
-    text-align:center;
-    padding:2px 0;
-  }
+  .calendar-controls { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
+  .calendar-controls .calendar-month { grid-column:1/-1; order:-1; text-align:center; padding:2px 0; }
   .calendar-controls .btn-secondary { min-height:38px; padding:0 8px; }
-
-  .calendar-filter-bar {
-    flex-wrap:nowrap !important;
-    overflow-x:auto;
-    -webkit-overflow-scrolling:touch;
-    padding-bottom:2px;
-  }
+  .calendar-filter-bar { flex-wrap:nowrap !important; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; }
   .calendar-filter-bar button { flex:0 0 auto; }
-
-  .calendar-grid {
-    min-width:700px;
-  }
-
+  .calendar-grid { min-width:700px; }
   .calendar-day { min-height:130px; }
   .calendar-item { padding:7px; }
   .calendar-item-title { max-width:100px; }
 
-  .settings h2,
-  .calendar-toolbar h2 { font-size:20px; }
-
+  .settings h2,.calendar-toolbar h2 { font-size:20px; }
   .login-page { padding:14px; }
   .login-card { padding:22px 18px; border-radius:16px; }
   .login-brand { margin-bottom:22px; }
   .login-form { gap:14px; }
-
-  .modal-overlay,
-  .modal-backdrop {
-    padding:10px !important;
-    align-items:flex-end !important;
-  }
-
-  .modal,
-  .modal-card,
-  .create-post-modal,
-  .post-modal {
-    width:100% !important;
-    max-width:none !important;
-    max-height:calc(100vh - 20px) !important;
-    border-radius:16px 16px 0 0 !important;
-    overflow:auto !important;
-  }
-
-  .modal-body,
-  .modal-content { max-height:none !important; }
-
-  .form-grid,
-  .post-form-grid,
-  .create-post-grid,
-  .schedule-form-grid {
-    grid-template-columns:1fr !important;
-  }
-
-  input,
-  select,
-  textarea,
-  button {
-    max-width:100%;
-  }
+  .modal-overlay,.modal-backdrop { padding:10px !important; align-items:flex-end !important; }
+  .modal,.modal-card,.create-post-modal,.post-modal { width:100% !important; max-width:none !important; max-height:calc(100vh - 20px) !important; border-radius:16px 16px 0 0 !important; overflow:auto !important; }
+  .modal-body,.modal-content { max-height:none !important; }
+  .form-grid,.post-form-grid,.create-post-grid,.schedule-form-grid { grid-template-columns:1fr !important; }
+  input,select,textarea,button { max-width:100%; }
 }
 
-@media (max-width: 520px) {
+@media (max-width:520px) {
   .main-content { padding:10px 10px 14px; }
   .topbar-inner { padding-left:10px; padding-right:68px; }
   .logout-button { right:8px; }
-
   .nav-item { font-size:9px; }
   .nav-icon { width:18px; height:18px; }
-
   .cards { gap:10px; }
   .stat-card { padding:12px; }
   .stat-badge { width:42px; height:42px; flex-basis:42px; }
-
+  .listview .posts tbody tr { padding-left:12px; padding-right:12px; }
+  .listview .posts td:nth-child(1) { font-size:14px; }
+  .listview .posts td { font-size:11px; }
+  .listview .posts .inline-status { font-size:11px; }
   .calendar-grid { min-width:660px; }
   .calendar-day { min-height:116px; }
-
   .dashboard-search-inner { min-height:42px; }
   .dashboard-search-result-main strong { font-size:13px; }
-
   .login-card { width:100%; }
-
-  .settings>.card:last-child li {
-    flex-direction:column;
-    align-items:flex-start;
-  }
+  .settings>.card:last-child li { flex-direction:column; align-items:flex-start; }
 }
