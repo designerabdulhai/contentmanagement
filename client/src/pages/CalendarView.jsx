@@ -69,7 +69,6 @@ function eventForPost(post, filter){
 
   const candidates = [];
 
-  // Scheduled date always represents the scheduled event.
   if(scheduled) {
     candidates.push({
       type: 'scheduled',
@@ -78,8 +77,6 @@ function eventForPost(post, filter){
     });
   }
 
-  // Uploaded uses an explicit uploaded timestamp when available,
-  // otherwise the post update time for uploaded records.
   if(status === 'uploaded' || uploaded) {
     const date = uploaded || updated;
     if(date) {
@@ -91,8 +88,6 @@ function eventForPost(post, filter){
     }
   }
 
-  // Posted/Published uses an explicit posted timestamp when available,
-  // otherwise created_at as the available post time.
   if(status === 'posted' || posted) {
     const date = posted || created;
     if(date) {
@@ -190,6 +185,61 @@ export default function CalendarView(){
 
   return (
     <div className="page calendar">
+      <style>{`
+        .calendar{width:100%;min-width:0}
+        .calendar-toolbar{flex-wrap:wrap}
+        .calendar-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        .calendar-month{min-width:140px;text-align:center}
+        .calendar-filter-bar{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+        .calendar-filter-bar::-webkit-scrollbar{display:none}
+        .calendar-day{min-width:0;overflow:hidden}
+        .calendar-item{min-width:0;width:100%;text-align:left;overflow:hidden}
+        .calendar-item-top{min-width:0}
+        .calendar-item-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .calendar-item-time{white-space:nowrap}
+        .calendar-filter-bar button{flex:0 0 auto}
+        @media (max-width:900px){
+          .main-content{padding:14px}
+          .calendar-toolbar{padding:12px;gap:12px}
+          .calendar-toolbar > div:first-child{min-width:0;flex:1 1 100%}
+          .calendar-controls{width:100%;display:grid;grid-template-columns:auto 40px minmax(120px,1fr) 40px auto;gap:6px}
+          .calendar-controls .btn-secondary{min-height:38px;padding:0 8px}
+          .calendar-month{min-width:0;font-size:14px}
+          .calendar-filter-bar{margin-bottom:10px!important;flex-wrap:nowrap!important}
+          .calendar-filter-bar button{min-height:36px;padding:0 11px;font-size:12px}
+          .calendar-grid{grid-template-columns:repeat(7,minmax(92px,1fr));overflow-x:auto;-webkit-overflow-scrolling:touch}
+          .calendar-weekdays{grid-template-columns:repeat(7,minmax(92px,1fr));overflow-x:auto;-webkit-overflow-scrolling:touch}
+        }
+        @media (max-width:640px){
+          .main-content{padding:10px}
+          .calendar-toolbar h2{font-size:18px}
+          .calendar-subtitle{font-size:12px}
+          .calendar-controls{grid-template-columns:1fr 38px minmax(100px,1.4fr) 38px 1fr}
+          .calendar-controls .btn-secondary{font-size:11px;min-height:36px}
+          .calendar-filter-bar{gap:6px!important}
+          .calendar-grid{grid-template-columns:repeat(7,minmax(74px,1fr))}
+          .calendar-weekdays{grid-template-columns:repeat(7,minmax(74px,1fr))}
+          .calendar-day{min-height:92px;padding:6px}
+          .calendar-day-number{font-size:12px}
+          .calendar-count{font-size:10px}
+          .calendar-item{padding:6px;border-radius:7px}
+          .calendar-item-top{gap:4px}
+          .calendar-item-title{font-size:10px}
+          .calendar-item-time{font-size:9px}
+          .calendar-item-event-type{font-size:9px!important;font-weight:700}
+          .calendar-item small{font-size:8px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+          .calendar-more{font-size:9px}
+          .calendar-weekdays > div{font-size:10px;padding:8px 4px}
+        }
+        @media (max-width:480px){
+          .calendar-controls{grid-template-columns:1fr 34px minmax(88px,1.3fr) 34px 1fr}
+          .calendar-controls .btn-secondary{padding:0 4px;font-size:10px}
+          .calendar-grid{grid-template-columns:repeat(7,minmax(66px,1fr))}
+          .calendar-weekdays{grid-template-columns:repeat(7,minmax(66px,1fr))}
+          .calendar-day{min-height:82px;padding:5px}
+        }
+      `}</style>
+
       <div className="calendar-toolbar">
         <div>
           <h2>Calendar View</h2>
