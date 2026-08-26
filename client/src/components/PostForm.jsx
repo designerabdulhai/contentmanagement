@@ -68,6 +68,31 @@ export default function PostForm({onSaved,onCancel}){
     request.then(r=>{ onSaved && onSaved(r.data); }).catch(()=>{});
   }
 
+  const cancel = ()=>{
+    setPost(empty);
+    setShowSuggestions(false);
+    setSelectedProjectPanel(null);
+    onCancel ? onCancel() : document.getElementById('createModal')?.classList.add('hidden');
+  }
+
+  // Keyboard shortcuts for the open post modal:
+  // Enter = Save, Escape = Cancel. Prevent the browser's default Enter
+  // behaviour so the shortcut is consistent across inputs, selects and notes.
+  const handleKeyDown = (e)=>{
+    if(e.isComposing) return;
+    if(e.key === 'Escape'){
+      e.preventDefault();
+      e.stopPropagation();
+      cancel();
+      return;
+    }
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      e.stopPropagation();
+      save();
+    }
+  }
+
   const useTemplate = (tId)=>{
     const t = templates.find(x=>x.id==tId);
     if(!t) return;
@@ -244,7 +269,7 @@ export default function PostForm({onSaved,onCancel}){
   };
 
   return (
-    <div className="postform drawer">
+    <div className="postform drawer" onKeyDown={handleKeyDown} tabIndex={-1}>
       <h3 id="create-post-title">{post.id? 'Edit Post':'Create New Post'}</h3>
       {loadingSettings && <div className="setting-help">Loading form options…</div>}
       {settingsError && <div className="setting-help form-error">{settingsError}</div>}
@@ -319,7 +344,7 @@ export default function PostForm({onSaved,onCancel}){
       </div>
       <div className="form-actions">
         <button className="btn-primary" type="button" onClick={save}>Save</button>
-        <button className="btn-secondary" type="button" onClick={()=>{ setPost(empty); onCancel ? onCancel() : document.getElementById('createModal')?.classList.add('hidden'); }}>Cancel</button>
+        <button className="btn-secondary" type="button" onClick={cancel}>Cancel</button>
       </div>
     </div>
   )
