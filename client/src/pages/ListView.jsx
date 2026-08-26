@@ -44,48 +44,36 @@ function firstDate(post, keys){
   return null;
 }
 
-// Keep List View's time/event logic identical to Calendar View.
-// Calendar treats scheduled, uploaded and posted as separate events.
 function getPostEvents(post){
   const status = statusKey(post?.status);
   const scheduled = toDate(post?.scheduled_at);
-  const uploaded = firstDate(post, [
-    'uploaded_at','uploadedAt',
-    'upload_time','uploadTime',
-    'uploaded_time','uploadedTime'
-  ]);
-  const posted = firstDate(post, [
-    'posted_at','postedAt',
-    'published_at','publishedAt',
-    'post_time','postTime','published_time','publishedTime'
-  ]);
+  const uploaded = firstDate(post, ['uploaded_at','uploadedAt','upload_time','uploadTime','uploaded_time','uploadedTime']);
+  const posted = firstDate(post, ['posted_at','postedAt','published_at','publishedAt','post_time','postTime','published_time','publishedTime']);
   const created = firstDate(post, ['created_at','createdAt']);
   const updated = firstDate(post, ['updated_at','updatedAt']);
 
   const events = [];
-
-  if(scheduled){
-    events.push({type:'scheduled', label:'Scheduled', date:scheduled});
-  }
-
+  if(scheduled) events.push({type:'scheduled', label:'Scheduled', date:scheduled});
   if(status === 'uploaded' || uploaded){
     const date = uploaded || updated;
     if(date) events.push({type:'uploaded', label:'Uploaded', date});
   }
-
   if(status === 'posted' || posted){
     const date = posted || created;
     if(date) events.push({type:'posted', label:'Posted', date});
   }
-
   return events.sort((a,b)=>a.date-b.date);
+}
+
+function displayDate(post){
+  const events = getPostEvents(post);
+  const scheduled = events.find(e=>e.type==='scheduled');
+  return scheduled?.date || events[0]?.date || null;
 }
 
 function PostTimes({post}){
   const events = getPostEvents(post);
-
   if(!events.length) return <span className="post-time-empty">No time</span>;
-
   return (
     <div className="post-time-stack">
       {events.map(event=>(
@@ -198,21 +186,15 @@ export default function ListView(){
   const groups = useMemo(()=>{
     const map = {};
     filteredPosts.forEach(post=>{
-      // Use the same primary date as the calendar: scheduled date first,
-      // otherwise the first available event date.
-      const events = getPostEvents(post);
-      const primary = events.find(event=>event.type==='scheduled') || events[0];
-      const key = primary ? formatDayLabel(primary.date) : 'No date';
+      const primary = displayDate(post);
+      const key = primary ? formatDayLabel(primary) : 'No date';
       (map[key] ||= []).push(post);
     });
-
     return Object.entries(map).sort((a,b)=>{
       if(a[0]==='No date') return 1;
       if(b[0]==='No date') return -1;
-      const ae = getPostEvents(a[1][0]);
-      const be = getPostEvents(b[1][0]);
-      const ad = (ae.find(e=>e.type==='scheduled') || ae[0])?.date || new Date(0);
-      const bd = (be.find(e=>e.type==='scheduled') || be[0])?.date || new Date(0);
+      const ad = displayDate(a[1][0]) || new Date(0);
+      const bd = displayDate(b[1][0]) || new Date(0);
       return bd-ad;
     });
   },[filteredPosts]);
@@ -297,7 +279,7 @@ export default function ListView(){
             <tbody>{filteredPosts.map(p=>(
               <tr key={p.id}>
                 <td>{p.project_name}</td><td>{p.content_type}</td><td>{p.channel}</td><td>{p.platform}</td>
-                <td><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select></td>
+                <td><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</td>
                 <td><PostTimes post={p}/></td>
                 <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link}/></div></td>
                 <td>{p.owner}</td>{actionButtons(p)}
