@@ -40,8 +40,8 @@ function weeklyTypeCounts(posts){
   return result;
 }
 
-function formatScheduledDateTime(value){
-  if(!value) return 'No schedule';
+function formatDateTime(value){
+  if(!value) return '';
   const d = new Date(value);
   if(Number.isNaN(d.getTime())) return String(value);
   return d.toLocaleString('en-US',{
@@ -51,6 +51,35 @@ function formatScheduledDateTime(value){
     hour:'numeric',
     minute:'2-digit'
   });
+}
+
+function getFirstValue(post, keys){
+  for(const key of keys){
+    const value = post?.[key];
+    if(value !== undefined && value !== null && String(value).trim() !== '') return value;
+  }
+  return null;
+}
+
+function getPostTimes(post){
+  const times = [];
+  const scheduled = getFirstValue(post,['scheduled_at','scheduledAt','schedule_at','scheduleAt']);
+  const uploaded = getFirstValue(post,['uploaded_at','uploadedAt','upload_time','uploaded_time','upload_at','uploadAt']);
+  const posted = getFirstValue(post,['posted_at','postedAt','published_at','publishedAt','post_time','posted_time','created_at']);
+
+  if(scheduled) times.push({label:'Scheduled', value:formatDateTime(scheduled)});
+  if(uploaded) times.push({label:'Uploaded', value:formatDateTime(uploaded)});
+  if(posted) times.push({label:'Posted', value:formatDateTime(posted)});
+
+  return times;
+}
+
+function getSearchDateValues(post){
+  return [
+    getFirstValue(post,['scheduled_at','scheduledAt','schedule_at','scheduleAt']),
+    getFirstValue(post,['uploaded_at','uploadedAt','upload_time','uploaded_time','upload_at','uploadAt']),
+    getFirstValue(post,['posted_at','postedAt','published_at','publishedAt','post_time','posted_time','created_at'])
+  ].filter(Boolean).map(formatDateTime);
 }
 
 function HoverTooltip({x,y,label,value,width=110}){ const tx=Math.max(4,Math.min(x-width/2,640-width-4)); const ty=Math.max(4,y-50); return <g pointerEvents="none"><rect x={tx} y={ty} width={width} height="40" rx="7" fill="#fff" stroke="#d9dee8"/><text x={tx+10} y={ty+16} fill="#111827" fontSize="11" fontWeight="700">{label}</text><text x={tx+10} y={ty+31} fill="#667085" fontSize="11" fontWeight="600">{value} post{value===1?'':'s'}</text></g> }
@@ -64,17 +93,33 @@ export default function Dashboard(){
  useEffect(()=>{ const onKey=e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();setSearchOpen(true);setTimeout(()=>document.querySelector('#dashboard-universal-search')?.focus(),0)} if(e.key==='Escape')setSearchOpen(false)}; window.addEventListener('keydown',onKey); return()=>window.removeEventListener('keydown',onKey)},[])
  const channelCounts=useMemo(()=>buildCounts(posts,'channel'),[posts]); const typeCounts=useMemo(()=>buildCounts(posts,'content_type'),[posts]); const monthlyCounts=useMemo(()=>monthCounts(posts),[posts]); const weeklyTypes=useMemo(()=>weeklyTypeCounts(posts),[posts]);
  const stats=[{key:'total',label:'Total posts',value:summary.total||0,icon:'📁',trend:'+4%'},{key:'scheduledWeek',label:'Scheduled this week',value:summary.scheduledWeek||0,icon:'🗓️',trend:'+1%'},{key:'uploadedMonth',label:'Uploaded this month',value:summary.uploadedMonth||0,icon:'⬆️',trend:'-2%'},{key:'listedCount',label:'Listed',value:summary.listedCount||0,icon:'📝',trend:'+0%'}];
- const searchQuery=search.trim().toLowerCase(); const results=useMemo(()=>{ if(!searchQuery) return []; return posts.filter(p=>[p.project_name,p.content_type,p.channel,p.platform,p.status,p.owner,p.notes,p.uploaded_link,p.scheduled_at,formatScheduledDateTime(p.scheduled_at)].some(v=>String(v||'').toLowerCase().includes(searchQuery))).slice(0,8)},[posts,searchQuery]);
+ const searchQuery=search.trim().toLowerCase(); const results=useMemo(()=>{ if(!searchQuery) return []; return posts.filter(p=>[p.project_name,p.content_type,p.channel,p.platform,p.status,p.owner,p.notes,p.uploaded_link,p.scheduled_at,...getSearchDateValues(p)].some(v=>String(v||'').toLowerCase().includes(searchQuery))).slice(0,8)},[posts,searchQuery]);
  const openResult=(p)=>{setSearchOpen(false);setSearch(''); window.dispatchEvent(new CustomEvent('navigateToList')); setTimeout(()=>window.dispatchEvent(new CustomEvent('openSearchResult',{detail:p})),50)};
  return <div className="page dashboard">
    <div className="dashboard-search-bar">
      <div className="dashboard-search-inner"><span className="dashboard-search-icon">⌕</span><input id="dashboard-universal-search" value={search} onFocus={()=>setSearchOpen(true)} onChange={e=>{setSearch(e.target.value);setSearchOpen(true)}} placeholder="Search projects, content, date, time, channels, platforms, status…" aria-label="Universal search"/><kbd>⌘K</kbd></div>
-     {searchOpen&&searchQuery&&<div className="dashboard-search-results">{results.length?results.map(p=><button type="button" key={p.id} className="dashboard-search-result" onMouseDown={e=>e.preventDefault()} onClick={()=>openResult(p)}><div className="dashboard-search-result-main"><strong>{p.project_name||'(untitled)'}</strong><span>{p.content_type||'—'} · {p.channel||'—'} · {p.platform||'—'}</span><span>{formatScheduledDateTime(p.scheduled_at)}</span></div><span className={`search-status ${String(p.status||'').toLowerCase()}`}>{p.status||'—'}</span></button>):<div className="dashboard-search-empty">No matching posts found.</div>}</div>}
+     {searchOpen&&searchQuery&&<div className="dashboard-search-results">{results.length?results.map(p=>{
+       const times = getPostTimes(p);
+       return <button type="button" key={p.id} className="dashboard-search-result" onMouseDown={e=>e.preventDefault()} onClick={()=>openResult(p)}>
+         <div className="dashboard-search-result-main">
+           <strong>{p.project_name||'(untitled)'}</strong>
+           <span>{p.content_type||'—'} · {p.channel||'—'} · {p.platform||'—'}</span>
+           {times.length > 0 ? (
+             <div className="dashboard-search-times">
+               {times.map(t=><span key={t.label}><b>{t.label}:</b> {t.value}</span>)}
+             </div>
+           ) : (
+             <span>No time recorded</span>
+           )}
+         </div>
+         <span className={`search-status ${String(p.status||'').toLowerCase()}`}>{p.status||'—'}</span>
+       </button>
+     }):<div className="dashboard-search-empty">No matching posts found.</div>}</div>}
    </div>
    <div className="dashboard-header" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,marginBottom:18}}><div><h2 style={{margin:'0 0 4px'}}>Dashboard</h2><div style={{color:'var(--muted)',fontSize:13}}>Manage projects and scheduled content from one place.</div></div><div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}}><button className="btn-secondary" type="button" onClick={()=>window.dispatchEvent(new CustomEvent('requestBulkCreate'))}>Bulk Create</button><button className="btn-primary" type="button" onClick={()=>window.dispatchEvent(new CustomEvent('requestNewPost'))}>+ New Scheduled Post</button></div></div>
    <div className="cards">{stats.map(s=><div className="card stat-card" key={s.key}><div className="stat-badge">{s.icon}</div><div className="stat-body"><div className="stat-label">{s.label}</div><div className="stat-value">{s.value}</div><div className="stat-trend">{s.trend}</div></div></div>)}</div>
    <div className="charts dashboard-chart-grid reference-dashboard-grid"><AreaChart title="Posts by Channel" entries={Object.entries(channelCounts)}/><AreaChart title="Posts by Content Type" entries={Object.entries(typeCounts)}/><AreaChart title="Total Content Monthly" entries={monthlyCounts.map(x=>[x.label,x.value])}/><BarChart title="Weekly Content Type" entries={Object.entries(weeklyTypes)}/></div>
-   <div className="recent card"><h3>Recent activity</h3><ul>{posts.slice(-10).reverse().map(p=><li key={p.id}>{p.project_name||'(untitled)'} — {p.status} — {formatScheduledDateTime(p.scheduled_at)}</li>)}</ul></div>
-   <div className="card due-soon"><h3>Due Today / This Week</h3><ul>{dueSoon.map(p=><li key={p.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><div style={{display:'flex',alignItems:'center',gap:8}}><div>{p.project_name||'(untitled)'} — {p.channel} — {formatScheduledDateTime(p.scheduled_at)}</div><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link}/></div><div><button type="button" onClick={()=>api.post('/posts/'+p.id+'/mark-uploaded',{uploaded_link:p.uploaded_link||null}).then(()=>{setDueSoon(ds=>ds.filter(x=>x.id!==p.id));loadDashboard()})}>Mark Uploaded</button></div></li>)}</ul><div><button type="button" onClick={()=>window.dispatchEvent(new CustomEvent('navigateToList'))}>View all</button></div></div>
+   <div className="recent card"><h3>Recent activity</h3><ul>{posts.slice(-10).reverse().map(p=><li key={p.id}>{p.project_name||'(untitled)'} — {p.status} — {formatDateTime(p.scheduled_at)}</li>)}</ul></div>
+   <div className="card due-soon"><h3>Due Today / This Week</h3><ul>{dueSoon.map(p=><li key={p.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><div style={{display:'flex',alignItems:'center',gap:8}}><div>{p.project_name||'(untitled)'} — {p.channel} — {formatDateTime(p.scheduled_at)}</div><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link}/></div><div><button type="button" onClick={()=>api.post('/posts/'+p.id+'/mark-uploaded',{uploaded_link:p.uploaded_link||null}).then(()=>{setDueSoon(ds=>ds.filter(x=>x.id!==p.id));loadDashboard()})}>Mark Uploaded</button></div></li>)}</ul><div><button type="button" onClick={()=>window.dispatchEvent(new CustomEvent('navigateToList'))}>View all</button></div></div>
  </div>
 }
