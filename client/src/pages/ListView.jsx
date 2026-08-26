@@ -6,24 +6,97 @@ import LinkActions from '../components/LinkActions'
 const STATUS_OPTIONS = ['Listed','Scheduled','Uploaded'];
 const TOKEN_KEY = 'content_schedule_auth_token';
 
+function toDate(value){
+  if(!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function formatDayLabel(value){
-  if(!value) return 'No date';
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? 'No date' : d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  const d = toDate(value);
+  if(!d) return 'No date';
+  return d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'});
 }
+
 function formatTime(value){
-  if(!value) return '';
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+  const d = value instanceof Date ? value : toDate(value);
+  return d ? d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}) : '';
 }
+
+function formatDateTime(value){
+  const d = value instanceof Date ? value : toDate(value);
+  return d ? d.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+}
+
+function statusKey(status){
+  const s = String(status || '').trim().toLowerCase();
+  if(s.includes('upload')) return 'uploaded';
+  if(s.includes('post') || s.includes('publish')) return 'posted';
+  if(s.includes('sched')) return 'scheduled';
+  return '';
+}
+
 function firstDate(post, keys){
   for(const key of keys){
-    if(!post?.[key]) continue;
-    const d = new Date(post[key]);
-    if(!Number.isNaN(d.getTime())) return d;
+    const d = toDate(post?.[key]);
+    if(d) return d;
   }
   return null;
 }
+
+// Keep List View's time/event logic identical to Calendar View.
+// Calendar treats scheduled, uploaded and posted as separate events.
+function getPostEvents(post){
+  const status = statusKey(post?.status);
+  const scheduled = toDate(post?.scheduled_at);
+  const uploaded = firstDate(post, [
+    'uploaded_at','uploadedAt',
+    'upload_time','uploadTime',
+    'uploaded_time','uploadedTime'
+  ]);
+  const posted = firstDate(post, [
+    'posted_at','postedAt',
+    'published_at','publishedAt',
+    'post_time','postTime','published_time','publishedTime'
+  ]);
+  const created = firstDate(post, ['created_at','createdAt']);
+  const updated = firstDate(post, ['updated_at','updatedAt']);
+
+  const events = [];
+
+  if(scheduled){
+    events.push({type:'scheduled', label:'Scheduled', date:scheduled});
+  }
+
+  if(status === 'uploaded' || uploaded){
+    const date = uploaded || updated;
+    if(date) events.push({type:'uploaded', label:'Uploaded', date});
+  }
+
+  if(status === 'posted' || posted){
+    const date = posted || created;
+    if(date) events.push({type:'posted', label:'Posted', date});
+  }
+
+  return events.sort((a,b)=>a.date-b.date);
+}
+
+function PostTimes({post}){
+  const events = getPostEvents(post);
+
+  if(!events.length) return <span className="post-time-empty">No time</span>;
+
+  return (
+    <div className="post-time-stack">
+      {events.map(event=>(
+        <span key={`${event.type}-${event.date.getTime()}`} title={formatDateTime(event.date)}>
+          <strong>{event.label}</strong> {formatTime(event.date)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function startOfWeek(date){
   const d = new Date(date);
   d.setHours(0,0,0,0);
@@ -31,26 +104,12 @@ function startOfWeek(date){
   d.setDate(d.getDate() - day);
   return d;
 }
+
 function startOfMonth(date){
   const d = new Date(date);
   d.setHours(0,0,0,0);
   d.setDate(1);
   return d;
-}
-
-function PostTimes({post}){
-  const scheduled = firstDate(post,['scheduled_at']);
-  const uploaded = firstDate(post,['uploaded_at','uploadedAt']);
-  const posted = firstDate(post,['posted_at','postedAt','published_at','publishedAt']);
-  const updated = firstDate(post,['updated_at','updatedAt']);
-
-  return (
-    <div className="post-time-stack">
-      {scheduled && <span><strong>Scheduled</strong> {formatTime(scheduled)}</span>}
-      {(uploaded || (post.status === 'Uploaded' && updated)) && <span><strong>Uploaded</strong> {formatTime(uploaded || updated)}</span>}
-      {posted && <span><strong>Posted</strong> {formatTime(posted)}</span>}
-    </div>
-  );
 }
 
 export default function ListView(){
@@ -83,7 +142,7 @@ export default function ListView(){
     };
   },[]);
 
-  const load = ()=> api.get('/posts').then(r=> setPosts(Array.isArray(r.data)?r.data:[])).catch(()=>setPosts([]));
+  const load = ()=> api.get('/posts').then(r=>setPosts(Array.isArray(r.data)?r.data:[])).catch(()=>setPosts([]));
 
   const deletePost = async (id)=>{
     if(!id || deletingPostId) return;
@@ -120,13 +179,10 @@ export default function ListView(){
     nextMonth.setMonth(nextMonth.getMonth()+1);
 
     return posts.filter(p=>{
-      const date = p.scheduled_at ? new Date(p.scheduled_at) : null;
-      const validDate = date && !Number.isNaN(date.getTime());
-      const inPeriod = filters.period==='week'
-        ? validDate && date>=weekStart && date<nextWeek
-        : filters.period==='month'
-          ? validDate && date>=monthStart && date<nextMonth
-          : true;
+      const events = getPostEvents(p);
+      const inPeriod = filters.period==='all'
+        ? true
+        : events.some(event=>event.date >= (filters.period==='week' ? weekStart : monthStart) && event.date < (filters.period==='week' ? nextWeek : nextMonth));
 
       return (
         (!filters.search || (p.project_name||'').toLowerCase().includes(filters.search.toLowerCase())) &&
@@ -142,13 +198,22 @@ export default function ListView(){
   const groups = useMemo(()=>{
     const map = {};
     filteredPosts.forEach(post=>{
-      const key = post.scheduled_at ? formatDayLabel(post.scheduled_at) : 'No date';
+      // Use the same primary date as the calendar: scheduled date first,
+      // otherwise the first available event date.
+      const events = getPostEvents(post);
+      const primary = events.find(event=>event.type==='scheduled') || events[0];
+      const key = primary ? formatDayLabel(primary.date) : 'No date';
       (map[key] ||= []).push(post);
     });
+
     return Object.entries(map).sort((a,b)=>{
       if(a[0]==='No date') return 1;
       if(b[0]==='No date') return -1;
-      return new Date(b[1][0]?.scheduled_at||0)-new Date(a[1][0]?.scheduled_at||0);
+      const ae = getPostEvents(a[1][0]);
+      const be = getPostEvents(b[1][0]);
+      const ad = (ae.find(e=>e.type==='scheduled') || ae[0])?.date || new Date(0);
+      const bd = (be.find(e=>e.type==='scheduled') || be[0])?.date || new Date(0);
+      return bd-ad;
     });
   },[filteredPosts]);
 
@@ -195,17 +260,12 @@ export default function ListView(){
           ['week','This Week'],
           ['month','This Month'],
         ].map(([value,label])=>(
-          <button
-            key={value}
-            type="button"
-            className={filters.period===value?'active':''}
-            onClick={()=>setFilters(f=>({...f,period:value}))}
-            style={{padding:'6px 10px',borderRadius:8,border:'1px solid #ddd',background:filters.period===value?'#eeeaff':'#fff',fontWeight:600}}
-          >{label}</button>
+          <button key={value} type="button" className={filters.period===value?'active':''} onClick={()=>setFilters(f=>({...f,period:value}))} style={{padding:'6px 10px',borderRadius:8,border:'1px solid #ddd',background:filters.period===value?'#eeeaff':'#fff',fontWeight:600}}>{label}</button>
         ))}
       </div>
 
       {deleteError && <div className="card" style={{marginBottom:12,padding:'10px 14px',color:'#b42318',background:'#fff1f0'}}>{deleteError}</div>}
+
       {groupByDate ? (
         <div className="date-groups">
           {groups.map(([day,items])=>(
@@ -246,6 +306,7 @@ export default function ListView(){
           </table>
         </div>
       )}
+
       {showCreateModal && <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowCreateModal(false)}}><div className="modal create-post-modal" role="dialog" aria-modal="true"><PostForm onSaved={()=>{setShowCreateModal(false);load()}} onCancel={()=>setShowCreateModal(false)}/></div></div>}
     </div>
   )
