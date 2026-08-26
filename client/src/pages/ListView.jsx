@@ -25,7 +25,7 @@ function formatTime(value){
 
 function formatDateTime(value){
   const d = toDate(value);
-  return d ? d.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+  return d ? d.toLocaleString([], {month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) : '';
 }
 
 function statusKey(status){
@@ -33,6 +33,7 @@ function statusKey(status){
   if(s.includes('upload')) return 'uploaded';
   if(s.includes('post') || s.includes('publish')) return 'posted';
   if(s.includes('sched')) return 'scheduled';
+  if(s.includes('list')) return 'listed';
   return '';
 }
 
@@ -62,42 +63,43 @@ function getPostEvents(post){
   const created = firstDate(post, ['created_at','createdAt']);
   const updated = firstDate(post, ['updated_at','updatedAt']);
 
-  const events = [];
-
-  if(scheduled){
-    events.push({type:'scheduled', label:'Scheduled', date:scheduled});
+  // The list should show only the date/time relevant to the CURRENT status.
+  // Uploaded posts use their upload timestamp; scheduled posts use scheduled_at.
+  if(status === 'uploaded'){
+    const date = uploaded || updated;
+    return date ? [{type:'uploaded', label:'Uploaded', date}] : [];
   }
 
-  if(uploaded){
-    events.push({type:'uploaded', label:'Uploaded', date:uploaded});
-  } else if(status === 'uploaded' && updated){
-    events.push({type:'uploaded', label:'Uploaded', date:updated});
+  if(status === 'scheduled'){
+    return scheduled ? [{type:'scheduled', label:'Scheduled', date:scheduled}] : [];
   }
 
-  if(posted){
-    events.push({type:'posted', label:'Posted', date:posted});
-  } else if(status === 'posted' && created){
-    events.push({type:'posted', label:'Posted', date:created});
+  if(status === 'posted'){
+    const date = posted || updated || created;
+    return date ? [{type:'posted', label:'Posted', date}] : [];
   }
 
-  return events.sort((a,b)=>a.date-b.date);
+  if(status === 'listed'){
+    const date = created || updated;
+    return date ? [{type:'listed', label:'Listed', date}] : [];
+  }
+
+  return [];
 }
 
 function displayDate(post){
-  const events = getPostEvents(post);
-  return events.find(e=>e.type==='scheduled')?.date || events[0]?.date || null;
+  return getPostEvents(post)[0]?.date || null;
 }
 
 function PostTimes({post}){
   const events = getPostEvents(post);
   if(!events.length) return <span className="post-time-empty">No time</span>;
+  const event = events[0];
   return (
     <div className="post-time-stack">
-      {events.map(event=>(
-        <span key={`${event.type}-${event.date.getTime()}`} title={formatDateTime(event.date)}>
-          <strong>{event.label}</strong> {formatTime(event.date)}
-        </span>
-      ))}
+      <span title={formatDateTime(event.date)}>
+        <strong>{event.label}</strong> {formatDateTime(event.date)}
+      </span>
     </div>
   );
 }
