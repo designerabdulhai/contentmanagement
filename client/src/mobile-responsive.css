@@ -9,17 +9,78 @@
   .nav-item { min-width:0;min-height:46px;padding:5px 4px;border-radius:10px;flex-direction:column;justify-content:center;gap:2px;font-size:10px; }
   .nav-icon { width:20px;height:20px; }
   .main-area { margin-left:0;width:100%;height:calc(100vh - 58px);overflow:hidden; }
-  .topbar-inner { position:relative;display:flex;align-items:center;justify-content:space-between;min-height:56px;height:56px;padding:10px 12px;box-sizing:border-box;overflow:hidden; }
-  .page-title { font-size:16px;flex:0 0 auto;min-width:0; }
-  .topbar-actions { display:flex !important;align-items:center !important;justify-content:flex-end !important;gap:8px !important;flex:0 0 auto !important;min-width:0 !important;margin-left:auto !important; }
-  .profile-name { display:none !important; }
-  .notify { width:28px;height:32px;display:flex;align-items:center;justify-content:center;flex:0 0 28px; }
+
+  /* Stable three-part header: title | actions. Never allow actions to cover title. */
+  .topbar-inner {
+    position:relative !important;
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) auto !important;
+    align-items:center !important;
+    justify-content:initial !important;
+    min-height:56px !important;
+    height:56px !important;
+    padding:8px 10px 8px 12px !important;
+    gap:8px !important;
+    box-sizing:border-box !important;
+    overflow:hidden !important;
+    z-index:20 !important;
+  }
+  .page-title {
+    grid-column:1 !important;
+    min-width:0 !important;
+    max-width:100% !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+    white-space:nowrap !important;
+    font-size:16px !important;
+    line-height:1.2 !important;
+    flex:none !important;
+  }
+  .topbar-actions {
+    grid-column:2 !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:flex-end !important;
+    gap:6px !important;
+    min-width:0 !important;
+    width:auto !important;
+    margin:0 !important;
+    flex:none !important;
+    overflow:visible !important;
+  }
+  .notify {
+    width:24px !important;
+    height:32px !important;
+    flex:0 0 24px !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+  }
   .managers-stack { display:none !important; }
-  .profile { display:flex !important;align-items:center !important;justify-content:center !important;flex:0 0 auto !important; }
-  .profile-avatar { width:32px;height:32px; }
+  .profile { display:flex !important; align-items:center !important; justify-content:center !important; flex:0 0 auto !important; min-width:0 !important; }
+  .profile-avatar { width:30px !important;height:30px !important;flex:0 0 30px !important; }
   .profile-avatar img { width:100%;height:100%;object-fit:cover;display:block;border-radius:50%; }
-  .topbar-inner .logout-button { position:static !important;right:auto !important;top:auto !important;height:34px;padding:0 10px;font-size:11px;flex:0 0 auto;border-radius:10px;z-index:1; }
-  .main-content { padding:10px 10px 18px;overflow:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;height:calc(100vh - 58px); }
+  .profile-name { display:none !important; }
+  .topbar-signout {
+    position:static !important;
+    width:auto !important;
+    min-width:56px !important;
+    height:32px !important;
+    padding:0 9px !important;
+    margin:0 !important;
+    border:1px solid var(--border) !important;
+    border-radius:8px !important;
+    background:var(--card) !important;
+    color:var(--text) !important;
+    font-size:10px !important;
+    font-weight:700 !important;
+    white-space:nowrap !important;
+    flex:0 0 auto !important;
+    z-index:21 !important;
+  }
+  .topbar-inner .logout-button { display:none !important; }
+
+  .main-content { padding:10px 10px 18px;overflow:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;height:calc(100vh - 56px); }
   .page { width:100%;max-width:none; }
   .card { border-radius:12px;padding:14px;margin-bottom:12px; }
   .cards,.dashboard-chart-grid,.charts { grid-template-columns:1fr;gap:12px; }
@@ -85,17 +146,21 @@
   .table-wrap { overflow:visible; }
   .listview .empty-state { margin-bottom:0; }
 
-  .calendar-toolbar { gap:10px;padding:12px; }
-  .calendar-toolbar > div:first-child { text-align:left; }
-  .calendar-controls { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px; }
-  .calendar-controls .calendar-month { grid-column:1/-1;order:-1;text-align:center;padding:2px 0; }
-  .calendar-controls .btn-secondary { min-height:38px;padding:0 8px; }
-  .calendar-filter-bar { flex-wrap:nowrap !important;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px; }
-  .calendar-filter-bar button { flex:0 0 auto; }
+  /* Calendar mobile layout: keep header controls inside the viewport. */
+  .calendar-toolbar { gap:10px !important;padding:12px !important;overflow:hidden !important; }
+  .calendar-toolbar > div:first-child { text-align:left;min-width:0; }
+  .calendar-controls { width:100% !important;display:grid !important;grid-template-columns:minmax(58px,1fr) 34px minmax(92px,1.5fr) 34px minmax(58px,1fr) !important;gap:6px !important;align-items:center !important;min-width:0 !important; }
+  .calendar-controls .calendar-month { grid-column:1/-1 !important;grid-row:1 !important;order:-1 !important;text-align:center !important;min-width:0 !important;padding:2px 0 !important;white-space:nowrap !important; }
+  .calendar-controls .btn-secondary { min-height:36px !important;padding:0 5px !important;min-width:0 !important;white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important;font-size:10px !important; }
+  .calendar-filter-bar { flex-wrap:nowrap !important;overflow-x:auto !important;-webkit-overflow-scrolling:touch;padding-bottom:2px; }
+  .calendar-filter-bar button { flex:0 0 auto !important; }
   .calendar-grid { min-width:0 !important;width:100% !important;max-width:100% !important;overflow:hidden !important; }
-  .calendar-day { min-height:130px;overflow:hidden; }
-  .calendar-item { padding:7px; }
-  .calendar-item-title { max-width:100px; }
+  .calendar-weekdays { width:100% !important;max-width:100% !important;overflow:hidden !important; }
+  .calendar-day { min-width:0 !important;min-height:116px;overflow:hidden; }
+  .calendar-item { min-width:0;width:100%;padding:7px;overflow:hidden; }
+  .calendar-item-title { max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+  .calendar-item-time { white-space:nowrap; }
+
   .settings h2,.calendar-toolbar h2 { font-size:20px; }
   .login-page { padding:14px; }
   .login-card { padding:22px 18px;border-radius:16px; }
@@ -110,11 +175,12 @@
 
 @media (max-width:520px) {
   .main-content { padding:10px 10px 14px; }
-  .topbar-inner { padding-left:10px;padding-right:10px; }
-  .topbar-actions { gap:6px !important; }
-  .notify { width:24px;flex-basis:24px; }
-  .profile-avatar { width:30px;height:30px; }
-  .topbar-inner .logout-button { height:32px;padding:0 9px;font-size:10px; }
+  .topbar-inner { min-height:54px !important;height:54px !important;padding:7px 8px 7px 10px !important;grid-template-columns:minmax(0,1fr) auto !important; }
+  .topbar-actions { gap:5px !important; }
+  .notify { width:22px !important;flex-basis:22px !important; }
+  .profile-avatar { width:29px !important;height:29px !important;flex-basis:29px !important; }
+  .topbar-signout { min-width:54px !important;height:30px !important;padding:0 8px !important;font-size:9.5px !important; }
+  .page-title { font-size:15px !important; }
   .nav-item { font-size:9px; }
   .nav-icon { width:18px;height:18px; }
   .cards { gap:10px; }
@@ -125,8 +191,11 @@
   .listview .posts td:nth-child(2),.listview .posts td:nth-child(3),.listview .posts td:nth-child(4) { padding-left:10px;padding-right:10px; }
   .listview .posts td:nth-child(5) .inline-status { min-width:88px;font-size:10.5px; }
   .link-actions .icon-btn { width:32px !important;height:32px !important; }
-  .calendar-grid { min-width:0 !important;width:100% !important; }
-  .calendar-day { min-height:116px; }
+  .calendar-grid,.calendar-weekdays { min-width:0 !important;width:100% !important;max-width:100% !important; }
+  .calendar-day { min-height:108px !important; }
+  .calendar-controls { grid-template-columns:minmax(56px,1fr) 32px minmax(82px,1.5fr) 32px minmax(56px,1fr) !important;gap:4px !important; }
+  .calendar-controls .btn-secondary { min-height:34px !important;font-size:9px !important;padding:0 3px !important; }
+  .calendar-controls .calendar-month { font-size:13px !important; }
   .dashboard-search-inner { min-height:42px; }
   .dashboard-search-result-main strong { font-size:13px; }
   .login-card { width:100%; }
