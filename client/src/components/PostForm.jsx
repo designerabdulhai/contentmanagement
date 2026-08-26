@@ -25,6 +25,7 @@ export default function PostForm({onSaved,onCancel}){
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const suggestionsCache = useRef({});
+  const projectPostsCache = useRef(null);
   const debounceRef = useRef(null);
   const requestSeqRef = useRef(0);
   const [selectedProjectPanel, setSelectedProjectPanel] = useState(null);
@@ -126,14 +127,63 @@ export default function PostForm({onSaved,onCancel}){
       applySuggestion(cached);
       return;
     }
+
     const requestId = ++requestSeqRef.current;
     setSuggestionLoading(true);
     setShowSuggestions(true);
-    api.get('/posts/project-suggestions', { params: { query: raw } }).then(res=>{
+
+    // Use the already supported /posts endpoint instead of the optional
+    // project-suggestions route. This keeps search working on the deployed
+    // Worker even when that specialised route is unavailable.
+    const buildSuggestions = (rows)=>{
+      const matching = (Array.isArray(rows) ? rows : []).filter(row=>
+        String(row?.project_name || '').toLowerCase().includes(key)
+      );
+      const map = new Map();
+      matching.forEach(row=>{
+        const name = String(row.project_name || '').trim();
+        if(!name) return;
+        if(!map.has(name)) map.set(name, {project_name:name,count:0,last_scheduled_at:null,last_scheduled_dates:[]});
+        const item = map.get(name);
+        item.count += 1;
+        if(row.scheduled_at){
+          item.last_scheduled_dates.push({
+            scheduled_at: row.scheduled_at,
+            content_type: row.content_type || '',
+            channel: row.channel || '',
+            status: row.status || ''
+          });
+        }
+      });
+      return Array.from(map.values()).map(item=>{
+        item.last_scheduled_dates.sort((a,b)=>new Date(b.scheduled_at)-new Date(a.scheduled_at));
+        item.last_scheduled_dates = item.last_scheduled_dates.slice(0,5);
+        item.last_scheduled_at = item.last_scheduled_dates[0]?.scheduled_at || null;
+        return item;
+      }).sort((a,b)=>{
+        const dateA = a.last_scheduled_at ? new Date(a.last_scheduled_at).getTime() : 0;
+        const dateB = b.last_scheduled_at ? new Date(b.last_scheduled_at).getTime() : 0;
+        return dateB-dateA || a.project_name.localeCompare(b.project_name);
+      }).slice(0,20);
+    };
+
+    const finish = (rows)=>{
       if(requestId !== requestSeqRef.current) return;
-      const data = Array.isArray(res.data) ? res.data : [];
+      const data = buildSuggestions(rows);
       suggestionsCache.current[key] = data;
       applySuggestion(data);
+    };
+
+    if(Array.isArray(projectPostsCache.current)){
+      finish(projectPostsCache.current);
+      return;
+    }
+
+    api.get('/posts').then(res=>{
+      if(requestId !== requestSeqRef.current) return;
+      const rows = Array.isArray(res.data) ? res.data : [];
+      projectPostsCache.current = rows;
+      finish(rows);
     }).catch(()=>{
       if(requestId !== requestSeqRef.current) return;
       setSuggestions([]);
