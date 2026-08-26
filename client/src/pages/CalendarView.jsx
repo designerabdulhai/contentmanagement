@@ -168,11 +168,12 @@ export default function CalendarView(){
         .calendar-filter-bar{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
         .calendar-filter-bar::-webkit-scrollbar{display:none}
         .calendar-day{min-width:0;overflow:hidden}
-        .calendar-item{min-width:0;width:100%;text-align:left;overflow:hidden;padding:5px 7px;border-radius:6px;line-height:1.15}
-        .calendar-item-top{min-width:0;display:flex;align-items:center;gap:6px}
+        .calendar-item{min-width:0;width:100%;text-align:left;overflow:hidden;padding:3px 6px;border-radius:5px;line-height:1.1}
+        .calendar-item-top{min-width:0;display:flex;align-items:center;gap:5px}
         .calendar-item-title{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .calendar-item-time{white-space:nowrap;flex:0 0 auto}
-        .calendar-item-content-type{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+        .calendar-item-content-type{display:inline-block;max-width:40%;margin-left:5px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .calendar-item-content-type::before{content:'• ';}
         .calendar-filter-bar button{flex:0 0 auto}
         @media (max-width:900px){
           .main-content{padding:14px}
@@ -195,14 +196,14 @@ export default function CalendarView(){
           .calendar-filter-bar{gap:6px!important}
           .calendar-grid{grid-template-columns:repeat(7,minmax(74px,1fr))}
           .calendar-weekdays{grid-template-columns:repeat(7,minmax(74px,1fr))}
-          .calendar-day{min-height:92px;padding:6px}
+          .calendar-day{min-height:86px;padding:5px}
           .calendar-day-number{font-size:12px}
           .calendar-count{font-size:10px}
-          .calendar-item{padding:4px 5px;border-radius:6px}
-          .calendar-item-top{gap:4px}
+          .calendar-item{padding:2px 4px;border-radius:5px}
+          .calendar-item-top{gap:3px}
           .calendar-item-title{font-size:10px}
           .calendar-item-time{font-size:9px}
-          .calendar-item-content-type{font-size:8px;margin-top:1px}
+          .calendar-item-content-type{font-size:8px;max-width:35%;margin-left:3px}
           .calendar-more{font-size:9px}
           .calendar-weekdays > div{font-size:10px;padding:8px 4px}
         }
@@ -211,7 +212,10 @@ export default function CalendarView(){
           .calendar-controls .btn-secondary{padding:0 4px;font-size:10px}
           .calendar-grid{grid-template-columns:repeat(7,minmax(66px,1fr))}
           .calendar-weekdays{grid-template-columns:repeat(7,minmax(66px,1fr))}
-          .calendar-day{min-height:82px;padding:5px}
+          .calendar-day{min-height:78px;padding:4px}
+          .calendar-item-title{font-size:9px}
+          .calendar-item-time{font-size:8px}
+          .calendar-item-content-type{font-size:7px}
         }
       `}</style>
 
@@ -273,9 +277,9 @@ export default function CalendarView(){
                     >
                       <div className="calendar-item-top">
                         <span className="calendar-item-title">{post.project_name || '(untitled)'}</span>
+                        {post.content_type ? <span className="calendar-item-content-type">{post.content_type}</span> : null}
                         <span className="calendar-item-time">{formatTime(event.date)}</span>
                       </div>
-                      {post.content_type ? <small className="calendar-item-content-type">{post.content_type}</small> : null}
                     </button>
                   );
                 })}
