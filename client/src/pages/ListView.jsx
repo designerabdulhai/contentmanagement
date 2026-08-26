@@ -8,7 +8,7 @@ const TOKEN_KEY = 'content_schedule_auth_token';
 
 function toDate(value){
   if(!value) return null;
-  const d = new Date(value);
+  const d = value instanceof Date ? value : new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
@@ -19,12 +19,12 @@ function formatDayLabel(value){
 }
 
 function formatTime(value){
-  const d = value instanceof Date ? value : toDate(value);
+  const d = toDate(value);
   return d ? d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}) : '';
 }
 
 function formatDateTime(value){
-  const d = value instanceof Date ? value : toDate(value);
+  const d = toDate(value);
   return d ? d.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
 }
 
@@ -46,29 +46,46 @@ function firstDate(post, keys){
 
 function getPostEvents(post){
   const status = statusKey(post?.status);
-  const scheduled = toDate(post?.scheduled_at);
-  const uploaded = firstDate(post, ['uploaded_at','uploadedAt','upload_time','uploadTime','uploaded_time','uploadedTime']);
-  const posted = firstDate(post, ['posted_at','postedAt','published_at','publishedAt','post_time','postTime','published_time','publishedTime']);
+  const scheduled = firstDate(post, ['scheduled_at']);
+  const uploaded = firstDate(post, [
+    'uploaded_at','uploadedAt',
+    'upload_time','uploadTime',
+    'uploaded_time','uploadedTime',
+    'upload_at','uploadAt',
+  ]);
+  const posted = firstDate(post, [
+    'posted_at','postedAt',
+    'published_at','publishedAt',
+    'post_time','postTime',
+    'published_time','publishedTime',
+  ]);
   const created = firstDate(post, ['created_at','createdAt']);
   const updated = firstDate(post, ['updated_at','updatedAt']);
 
   const events = [];
-  if(scheduled) events.push({type:'scheduled', label:'Scheduled', date:scheduled});
-  if(status === 'uploaded' || uploaded){
-    const date = uploaded || updated;
-    if(date) events.push({type:'uploaded', label:'Uploaded', date});
+
+  if(scheduled){
+    events.push({type:'scheduled', label:'Scheduled', date:scheduled});
   }
-  if(status === 'posted' || posted){
-    const date = posted || created;
-    if(date) events.push({type:'posted', label:'Posted', date});
+
+  if(uploaded){
+    events.push({type:'uploaded', label:'Uploaded', date:uploaded});
+  } else if(status === 'uploaded' && updated){
+    events.push({type:'uploaded', label:'Uploaded', date:updated});
   }
+
+  if(posted){
+    events.push({type:'posted', label:'Posted', date:posted});
+  } else if(status === 'posted' && created){
+    events.push({type:'posted', label:'Posted', date:created});
+  }
+
   return events.sort((a,b)=>a.date-b.date);
 }
 
 function displayDate(post){
   const events = getPostEvents(post);
-  const scheduled = events.find(e=>e.type==='scheduled');
-  return scheduled?.date || events[0]?.date || null;
+  return events.find(e=>e.type==='scheduled')?.date || events[0]?.date || null;
 }
 
 function PostTimes({post}){
@@ -279,7 +296,7 @@ export default function ListView(){
             <tbody>{filteredPosts.map(p=>(
               <tr key={p.id}>
                 <td>{p.project_name}</td><td>{p.content_type}</td><td>{p.channel}</td><td>{p.platform}</td>
-                <td><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</td>
+                <td><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select></td>
                 <td><PostTimes post={p}/></td>
                 <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link}/></div></td>
                 <td>{p.owner}</td>{actionButtons(p)}
