@@ -131,7 +131,6 @@ export default function App(){
           {route==='calendar' && <CalendarView />}
         </main>
       </div>
-      <style>{`table.posts th:nth-child(7), table.posts td:nth-child(7){display:none !important;}`}</style>
       {editingPost && (
         <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPost(null)}}>
           <div className="modal create-post-modal" role="dialog" aria-modal="true">
