@@ -1,236 +1,265 @@
-/* Mobile List View — compact lead-card rows. Desktop unchanged. */
+/* Mobile List View — stable compact lead-card rows. Desktop unchanged. */
 
 @media (max-width: 900px) {
+  /* Header: title | bell | profile | sign out, no overlap. */
+  .topbar-inner {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    min-height: 58px !important;
+    padding: 10px 128px 10px 14px !important;
+    box-sizing: border-box !important;
+  }
+  .topbar-actions {
+    position: absolute !important;
+    right: 74px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: auto !important;
+    margin: 0 !important;
+  }
+  .topbar-actions .notify {
+    position: static !important;
+    width: 24px !important;
+    height: 32px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+  }
+  .topbar-actions .managers-stack { display: none !important; }
+  .topbar-actions .profile {
+    position: static !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    margin: 0 !important;
+  }
+  .topbar-actions .profile-avatar {
+    width: 31px !important;
+    height: 31px !important;
+    flex: 0 0 31px !important;
+    margin: 0 !important;
+  }
+  .logout-button {
+    position: absolute !important;
+    right: 10px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    min-width: 62px !important;
+    height: 34px !important;
+    margin: 0 !important;
+    padding: 0 9px !important;
+    z-index: 20 !important;
+    white-space: nowrap !important;
+  }
+
+  /* List card shell */
   .listview .date-group { background: transparent !important; border: 0 !important; box-shadow: none !important; overflow: visible !important; }
   .listview .date-group-header { background: transparent !important; border: 0 !important; padding: 10px 3px 8px !important; }
   .listview .date-group-header h3 { margin: 0 !important; font-size: 14px !important; }
   .listview .date-group-header span { font-size: 11px !important; }
-
   .listview .date-group-table,
-  .listview > .table-wrap {
-    margin: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    overflow: visible !important;
-  }
-
+  .listview > .table-wrap { margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; overflow: visible !important; }
   .listview .date-group-table .posts,
-  .listview > .table-wrap .posts {
-    display: block !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    border: 0 !important;
-  }
+  .listview > .table-wrap .posts { display: block !important; width: 100% !important; min-width: 0 !important; }
   .listview .date-group-table .posts thead,
   .listview > .table-wrap .posts thead { display: none !important; }
   .listview .date-group-table .posts tbody,
   .listview > .table-wrap .posts tbody { display: block !important; width: 100% !important; }
 
-  /* One real flex row: title, then metadata/status, then time/owner/actions. */
+  /* Four equal columns for the metadata/status row. */
   .listview .date-group-table .posts tbody tr,
   .listview > .table-wrap .posts tbody tr {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    align-items: center !important;
-    column-gap: 6px !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-template-rows: auto 32px auto auto !important;
+    column-gap: 8px !important;
     row-gap: 9px !important;
-    position: relative !important;
     width: 100% !important;
     box-sizing: border-box !important;
-    padding: 15px !important;
+    padding: 14px !important;
     margin: 0 0 12px 0 !important;
     border: 1px solid var(--border) !important;
     border-radius: 16px !important;
     background: var(--card) !important;
     box-shadow: 0 4px 14px rgba(15,23,42,.06) !important;
+    position: relative !important;
   }
-
   .listview .date-group-table .posts td,
   .listview > .table-wrap .posts td {
+    position: static !important;
     display: block !important;
     float: none !important;
-    position: static !important;
     transform: none !important;
     inset: auto !important;
+    width: auto !important;
     min-width: 0 !important;
     max-width: none !important;
-    width: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     border: 0 !important;
-    overflow: visible !important;
+    overflow: hidden !important;
     box-sizing: border-box !important;
-    line-height: 1.25 !important;
     word-break: normal !important;
+    line-height: 1.25 !important;
   }
   .listview .date-group-table .posts td::before,
   .listview > .table-wrap .posts td::before { display: none !important; content: none !important; }
 
-  /* Project title */
+  /* Title + top-right link controls */
   .listview .posts td:nth-child(1) {
-    flex: 1 1 100% !important;
-    width: 100% !important;
+    grid-column: 1 / 4 !important;
+    grid-row: 1 !important;
+    align-self: center !important;
     font-size: 17px !important;
     font-weight: 800 !important;
     color: var(--text) !important;
     letter-spacing: -.02em !important;
-    padding-right: 88px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
-
-  /* Open + Copy stay on the title row, top-right. */
   .listview .posts td:nth-child(7) {
-    position: absolute !important;
-    top: 13px !important;
-    right: 12px !important;
-    z-index: 3 !important;
+    grid-column: 4 !important;
+    grid-row: 1 !important;
+    justify-self: end !important;
+    align-self: center !important;
     display: flex !important;
     width: auto !important;
-    min-width: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    position: static !important;
   }
-  .listview .posts td:nth-child(7) > div {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
-    gap: 5px !important;
-    width: auto !important;
-    min-width: 0 !important;
-  }
+  .listview .posts td:nth-child(7) > div { display: flex !important; align-items: center !important; gap: 4px !important; width: auto !important; }
   .listview .posts td:nth-child(7) .link-text { display: none !important; }
-  .listview .posts td:nth-child(7) .link-actions { display: flex !important; gap: 5px !important; }
+  .listview .posts td:nth-child(7) .link-actions { display: flex !important; gap: 4px !important; }
   .listview .posts td:nth-child(7) .link-actions .icon-btn {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 32px !important;
-    height: 32px !important;
+    width: 30px !important;
+    height: 30px !important;
     padding: 0 !important;
     margin: 0 !important;
     border: 1px solid var(--border) !important;
     border-radius: 50% !important;
     background: #f2f4f7 !important;
     color: var(--text) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
-  /* Type / Channel / Platform / Uploaded — all on ONE horizontal line. */
+  /* Exactly equal, evenly spaced: Type | Channel | Platform | Uploaded */
+  .listview .posts td:nth-child(2) { grid-column: 1 !important; grid-row: 2 !important; }
+  .listview .posts td:nth-child(3) { grid-column: 2 !important; grid-row: 2 !important; }
+  .listview .posts td:nth-child(4) { grid-column: 3 !important; grid-row: 2 !important; }
+  .listview .posts td:nth-child(5) { grid-column: 4 !important; grid-row: 2 !important; }
+
   .listview .posts td:nth-child(2),
   .listview .posts td:nth-child(3),
   .listview .posts td:nth-child(4),
   .listview .posts td:nth-child(5) {
-    flex: 0 0 auto !important;
-    width: auto !important;
-    max-width: none !important;
+    width: 100% !important;
     min-width: 0 !important;
     height: 32px !important;
-    display: inline-flex !important;
+    display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     box-sizing: border-box !important;
-    padding: 0 10px !important;
     margin: 0 !important;
     border-radius: 999px !important;
     white-space: nowrap !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
   }
-
   .listview .posts td:nth-child(2),
   .listview .posts td:nth-child(3),
   .listview .posts td:nth-child(4) {
+    padding: 0 6px !important;
     border: 1px solid #dfe3e8 !important;
     background: #f7f8fa !important;
     color: #1f2937 !important;
-    font-size: 9.5px !important;
+    font-size: 8px !important;
     font-weight: 700 !important;
+    text-align: center !important;
+    text-overflow: ellipsis !important;
   }
-
   .listview .posts td:nth-child(5) {
-    margin-left: auto !important;
     padding: 0 !important;
-    border: 0 !important;
     background: transparent !important;
+    border: 0 !important;
     overflow: visible !important;
   }
-
   .listview .posts td:nth-child(5) .inline-status {
-    display: inline-flex !important;
-    align-items: center !important;
-    width: auto !important;
-    min-width: 92px !important;
-    max-width: 116px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
     height: 32px !important;
-    padding: 0 20px 0 11px !important;
+    padding: 0 14px 0 6px !important;
     border: 0 !important;
     border-radius: 999px !important;
-    font-size: 10px !important;
+    font-size: 8px !important;
     line-height: 32px !important;
+    text-align: center !important;
     white-space: nowrap !important;
   }
 
-  /* Schedule time on its own clean line. */
+  /* Time, then owner/actions. */
   .listview .posts td:nth-child(6) {
-    flex: 1 1 100% !important;
-    width: 100% !important;
-    color: var(--muted) !important;
-    font-size: 12px !important;
-    font-weight: 600 !important;
-    white-space: nowrap !important;
-    padding-top: 1px !important;
-  }
-
-  /* Owner + actions bottom row. */
-  .listview .posts td:nth-child(8) {
-    flex: 1 1 auto !important;
-    width: auto !important;
+    grid-column: 1 / 5 !important;
+    grid-row: 3 !important;
     color: var(--muted) !important;
     font-size: 11px !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+  }
+  .listview .posts td:nth-child(8) {
+    grid-column: 1 / 3 !important;
+    grid-row: 4 !important;
+    color: var(--muted) !important;
+    font-size: 11px !important;
+    align-self: end !important;
   }
   .listview .posts td:nth-child(8)::before {
     content: 'Owner' !important;
     display: block !important;
     margin-bottom: 2px !important;
     color: var(--muted) !important;
-    font-size: 9px !important;
+    font-size: 8.5px !important;
     font-weight: 800 !important;
     text-transform: uppercase !important;
     letter-spacing: .08em !important;
   }
-
   .listview .posts td:nth-child(9) {
-    flex: 0 0 auto !important;
-    width: auto !important;
+    grid-column: 3 / 5 !important;
+    grid-row: 4 !important;
     display: flex !important;
-    align-items: center !important;
+    align-items: flex-end !important;
     justify-content: flex-end !important;
     gap: 4px !important;
   }
   .listview .posts td:nth-child(9) button {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 32px !important;
-    height: 32px !important;
+    width: 30px !important;
+    height: 30px !important;
     padding: 0 !important;
     margin: 0 !important;
     border: 1px solid var(--border) !important;
     border-radius: 50% !important;
     background: #f7f8fa !important;
     color: var(--muted) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 }
 
 @media (max-width: 520px) {
+  .topbar-inner { padding-left: 12px !important; padding-right: 126px !important; }
+  .topbar-actions { right: 70px !important; gap: 6px !important; }
+  .topbar-actions .profile-avatar { width: 30px !important; height: 30px !important; flex-basis: 30px !important; }
+  .logout-button { right: 8px !important; min-width: 60px !important; height: 32px !important; padding: 0 8px !important; }
   .listview .date-group-table .posts tbody tr,
-  .listview > .table-wrap .posts tbody tr { padding: 14px !important; border-radius: 15px !important; column-gap: 5px !important; }
+  .listview > .table-wrap .posts tbody tr { padding: 12px !important; column-gap: 6px !important; row-gap: 8px !important; }
   .listview .posts td:nth-child(1) { font-size: 16px !important; }
-  .listview .posts td:nth-child(2),
-  .listview .posts td:nth-child(3),
-  .listview .posts td:nth-child(4) { padding-left: 8px !important; padding-right: 8px !important; font-size: 9px !important; }
-  .listview .posts td:nth-child(5) .inline-status { min-width: 86px !important; max-width: 102px !important; font-size: 9.5px !important; padding-left: 10px !important; padding-right: 18px !important; }
-  .listview .posts td:nth-child(7) .link-actions .icon-btn,
-  .listview .posts td:nth-child(9) button { width: 30px !important; height: 30px !important; }
+  .listview .posts td:nth-child(2), .listview .posts td:nth-child(3), .listview .posts td:nth-child(4) { font-size: 7.5px !important; padding-left: 4px !important; padding-right: 4px !important; }
+  .listview .posts td:nth-child(5) .inline-status { font-size: 8px !important; padding-left: 5px !important; padding-right: 11px !important; }
 }
