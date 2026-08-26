@@ -10,7 +10,7 @@ export default function Topbar({title, managers, profile, onLogout}){
       <div className="page-title">{title}</div>
       <div className="topbar-actions">
         <div className="notify">
-          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M12 22a2 2 0 002-2H10a2 2 0 002-2zm6-6v-5a6 6 0 10-12 0v5l-2 2v1h16v-1l-2-2z"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 22a2 2 0 002-2H10a2 2 0 002-2zm6-6v-5a6 6 0 10-12 0v5l-2 2v1h16v-1l-2-2z"/></svg>
           <span className="dot" />
         </div>
 
@@ -29,9 +29,7 @@ export default function Topbar({title, managers, profile, onLogout}){
         </div>
 
         {onLogout && (
-          <button className="topbar-signout" onClick={onLogout} type="button">
-            Sign out
-          </button>
+          <button className="topbar-signout" onClick={onLogout} type="button">Sign out</button>
         )}
       </div>
     </div>
