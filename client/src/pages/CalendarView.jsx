@@ -35,12 +35,7 @@ function formatTime(value){
 
 function formatDateTime(value){
   const d = toDate(value);
-  return d ? d.toLocaleString([], {
-    month:'short',
-    day:'numeric',
-    hour:'numeric',
-    minute:'2-digit'
-  }) : '';
+  return d ? d.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
 }
 
 function statusKey(status){
@@ -70,44 +65,25 @@ function firstDateKey(post, keys){
 function eventForPost(post, filter){
   const status = statusKey(post?.status);
   const scheduled = firstDate(post, ['scheduled_at']);
-  const uploadedKey = firstDateKey(post, [
-    'uploaded_at','uploadedAt',
-    'upload_time','uploadTime',
-    'uploaded_time','uploadedTime',
-    'upload_at','uploadAt',
-  ]);
+  const uploadedKey = firstDateKey(post, ['uploaded_at','uploadedAt','upload_time','uploadTime','uploaded_time','uploadedTime','upload_at','uploadAt']);
   const uploaded = uploadedKey ? toDate(post?.[uploadedKey]) : null;
-  const postedKey = firstDateKey(post, [
-    'posted_at','postedAt',
-    'published_at','publishedAt',
-    'post_time','postTime',
-    'published_time','publishedTime',
-  ]);
+  const postedKey = firstDateKey(post, ['posted_at','postedAt','published_at','publishedAt','post_time','postTime','published_time','publishedTime']);
   const posted = postedKey ? toDate(post?.[postedKey]) : null;
   const created = firstDate(post, ['created_at','createdAt']);
   const updated = firstDate(post, ['updated_at','updatedAt']);
 
-  // Calendar represents the post's current lifecycle state. A scheduled
-  // timestamp should not create a second calendar item for a post that is
-  // already uploaded/posted. Likewise, uploaded/posted states should use
-  // their lifecycle timestamp instead of falling back to scheduled_at.
   const currentEvent = (() => {
     if(status === 'uploaded') {
       const date = uploaded || updated || created;
       return date ? { type:'uploaded', date, label:'Uploaded' } : null;
     }
-
     if(status === 'posted') {
       const date = posted || updated || created;
       return date ? { type:'posted', date, label:'Posted' } : null;
     }
-
     if(status === 'scheduled') {
       return scheduled ? { type:'scheduled', date:scheduled, label:'Scheduled' } : null;
     }
-
-    // For legacy/unknown status values, prefer the explicitly recorded
-    // lifecycle timestamp, then the scheduled timestamp.
     if(posted) return { type:'posted', date:posted, label:'Posted' };
     if(uploaded) return { type:'uploaded', date:uploaded, label:'Uploaded' };
     if(scheduled) return { type:'scheduled', date:scheduled, label:'Scheduled' };
@@ -140,16 +116,9 @@ export default function CalendarView(){
   useEffect(()=>{
     let alive = true;
     setLoading(true);
-    api.get('/posts').then(r=>{
-      if(alive) setPosts(Array.isArray(r.data) ? r.data : []);
-    }).catch(()=>{
-      if(alive){
-        setPosts([]);
-        setError('Unable to load calendar posts.');
-      }
-    }).finally(()=>{
-      if(alive) setLoading(false);
-    });
+    api.get('/posts').then(r=>{ if(alive) setPosts(Array.isArray(r.data) ? r.data : []); })
+      .catch(()=>{ if(alive){ setPosts([]); setError('Unable to load calendar posts.'); } })
+      .finally(()=>{ if(alive) setLoading(false); });
     return ()=>{ alive = false; };
   },[]);
 
@@ -164,36 +133,27 @@ export default function CalendarView(){
 
   const events = useMemo(()=>{
     const output = [];
-
-    posts.forEach(post=>{
-      eventForPost(post, filter).forEach(event=>{
-        output.push({
-          ...event,
-          post,
-          key: `${post.id}-${event.type}-${event.date.getTime()}`,
-        });
-      });
-    });
-
+    posts.forEach(post=>eventForPost(post, filter).forEach(event=>output.push({
+      ...event,
+      post,
+      key: `${post.id}-${event.type}-${event.date.getTime()}`,
+    })));
     return output;
   },[posts, filter]);
 
   const byDate = useMemo(()=>{
     const map = {};
-
     events.forEach(event=>{
       const key = dateKey(event.date);
       (map[key] ||= []).push(event);
     });
-
     Object.values(map).forEach(items=>items.sort((a,b)=>a.date-b.date));
     return map;
   },[events]);
 
-  const monthEvents = useMemo(()=>events.filter(event=>{
-    return event.date.getFullYear() === current.getFullYear() &&
-      event.date.getMonth() === current.getMonth();
-  }),[events,current]);
+  const monthEvents = useMemo(()=>events.filter(event=>
+    event.date.getFullYear() === current.getFullYear() && event.date.getMonth() === current.getMonth()
+  ),[events,current]);
 
   const goMonth = (delta)=>setCurrent(d=>new Date(d.getFullYear(),d.getMonth()+delta,1));
   const goToday = ()=>setCurrent(new Date());
@@ -208,10 +168,11 @@ export default function CalendarView(){
         .calendar-filter-bar{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
         .calendar-filter-bar::-webkit-scrollbar{display:none}
         .calendar-day{min-width:0;overflow:hidden}
-        .calendar-item{min-width:0;width:100%;text-align:left;overflow:hidden}
-        .calendar-item-top{min-width:0}
-        .calendar-item-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .calendar-item-time{white-space:nowrap}
+        .calendar-item{min-width:0;width:100%;text-align:left;overflow:hidden;padding:5px 7px;border-radius:6px;line-height:1.15}
+        .calendar-item-top{min-width:0;display:flex;align-items:center;gap:6px}
+        .calendar-item-title{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .calendar-item-time{white-space:nowrap;flex:0 0 auto}
+        .calendar-item-content-type{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
         .calendar-filter-bar button{flex:0 0 auto}
         @media (max-width:900px){
           .main-content{padding:14px}
@@ -237,12 +198,11 @@ export default function CalendarView(){
           .calendar-day{min-height:92px;padding:6px}
           .calendar-day-number{font-size:12px}
           .calendar-count{font-size:10px}
-          .calendar-item{padding:6px;border-radius:7px}
+          .calendar-item{padding:4px 5px;border-radius:6px}
           .calendar-item-top{gap:4px}
           .calendar-item-title{font-size:10px}
           .calendar-item-time{font-size:9px}
-          .calendar-item-event-type{font-size:9px!important;font-weight:700}
-          .calendar-item small{font-size:8px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+          .calendar-item-content-type{font-size:8px;margin-top:1px}
           .calendar-more{font-size:9px}
           .calendar-weekdays > div{font-size:10px;padding:8px 4px}
         }
@@ -274,12 +234,7 @@ export default function CalendarView(){
 
       <div className="calendar-filter-bar" style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
         {FILTERS.map(item=>(
-          <button
-            key={item.key}
-            type="button"
-            className={filter === item.key ? 'btn-primary' : 'btn-secondary'}
-            onClick={()=>setFilter(item.key)}
-          >
+          <button key={item.key} type="button" className={filter === item.key ? 'btn-primary' : 'btn-secondary'} onClick={()=>setFilter(item.key)}>
             {item.label}
           </button>
         ))}
@@ -320,9 +275,7 @@ export default function CalendarView(){
                         <span className="calendar-item-title">{post.project_name || '(untitled)'}</span>
                         <span className="calendar-item-time">{formatTime(event.date)}</span>
                       </div>
-                      <small className="calendar-item-event-type">{event.label}</small>
-                      {post.content_type ? <small>{post.content_type}</small> : null}
-                      {post.channel || post.platform ? <small>{[post.channel, post.platform].filter(Boolean).join(' • ')}</small> : null}
+                      {post.content_type ? <small className="calendar-item-content-type">{post.content_type}</small> : null}
                     </button>
                   );
                 })}
