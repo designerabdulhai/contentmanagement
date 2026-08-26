@@ -1,5 +1,4 @@
 import React, {useEffect, useMemo, useState} from 'react'
-import api from '../api'
 
 const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const FILTERS = [
@@ -171,8 +170,8 @@ export default function CalendarView(){
         .calendar-item{min-width:0;width:100%;text-align:left;overflow:hidden;padding:3px 6px;border-radius:5px;line-height:1.1}
         .calendar-item-top{min-width:0;display:flex;align-items:center;gap:5px}
         .calendar-item-title{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .calendar-item-time{white-space:nowrap;flex:0 0 auto}
-        .calendar-item-content-type{display:inline-block;max-width:40%;margin-left:5px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .calendar-item-time{white-space:nowrap;flex:0 0 auto;font-size:10px}
+        .calendar-item-content-type{display:inline-flex;flex:0 1 32%;font-size:10px;font-weight:400;line-height:1;max-width:32%;margin-left:5px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .calendar-item-content-type::before{content:'• ';}
         .calendar-filter-bar button{flex:0 0 auto}
         @media (max-width:900px){
@@ -203,7 +202,7 @@ export default function CalendarView(){
           .calendar-item-top{gap:3px}
           .calendar-item-title{font-size:10px}
           .calendar-item-time{font-size:9px}
-          .calendar-item-content-type{font-size:8px;max-width:35%;margin-left:3px}
+          .calendar-item-content-type{font-size:8px;max-width:32%;flex-basis:32%;margin-left:3px}
           .calendar-more{font-size:9px}
           .calendar-weekdays > div{font-size:10px;padding:8px 4px}
         }
@@ -215,7 +214,7 @@ export default function CalendarView(){
           .calendar-day{min-height:78px;padding:4px}
           .calendar-item-title{font-size:9px}
           .calendar-item-time{font-size:8px}
-          .calendar-item-content-type{font-size:7px}
+          .calendar-item-content-type{font-size:7px;max-width:32%;flex-basis:32%}
         }
       `}</style>
 
