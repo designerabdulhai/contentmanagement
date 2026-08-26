@@ -1,6 +1,7 @@
 import React, {useEffect, useMemo, useState} from 'react'
 import api from '../api'
 import PostForm from '../components/PostForm'
+import LinkActions from '../components/LinkActions'
 
 const STATUS_OPTIONS = ['Listed','Scheduled','Uploaded'];
 const TOKEN_KEY = 'content_schedule_auth_token';
@@ -160,7 +161,7 @@ export default function ListView(){
   const statusCell=p=><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select>;
   const tableRows=items=>items.map(p=>(
     <tr key={p.id}>
-      <td>{p.project_name}</td><td>{p.content_type}</td><td>{p.channel}</td><td>{p.platform}</td><td>{statusCell(p)}</td><td><PostTimes post={p}/></td><td>{p.owner}</td>{actionButtons(p)}
+      <td>{p.project_name}</td><td>{p.content_type}</td><td>{p.channel}</td><td>{p.platform}</td><td>{statusCell(p)}</td><td><PostTimes post={p}/></td><td><LinkActions url={p.uploaded_link}/></td><td>{p.owner}</td>{actionButtons(p)}
     </tr>
   ));
 
@@ -185,10 +186,10 @@ export default function ListView(){
     {groupByDate ? <div className="date-groups">
       {groups.map(([day,items])=><section className="date-group" key={day}>
         <div className="date-group-header"><div><h3>{day}</h3><span>{items.length} {items.length===1?'post':'posts'}</span></div></div>
-        <div className="table-wrap card date-group-table"><table className="posts"><thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Time</th><th>Owner</th><th>Actions</th></tr></thead><tbody>{tableRows(items)}</tbody></table></div>
+        <div className="table-wrap card date-group-table"><table className="posts"><thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Time</th><th>Link</th><th>Owner</th><th>Actions</th></tr></thead><tbody>{tableRows(items)}</tbody></table></div>
       </section>)}
       {groups.length===0&&<div className="card empty-state">No posts found.</div>}
-    </div> : <div className="table-wrap card"><table className="posts"><thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Date / Time</th><th>Owner</th><th>Actions</th></tr></thead><tbody>{tableRows(filteredPosts)}</tbody></table></div>}
+    </div> : <div className="table-wrap card"><table className="posts"><thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Date / Time</th><th>Link</th><th>Owner</th><th>Actions</th></tr></thead><tbody>{tableRows(filteredPosts)}</tbody></table></div>}
 
     {showCreateModal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget){setShowCreateModal(false);setEditingPost(null)}}}><div className="modal create-post-modal" role="dialog" aria-modal="true"><PostForm onSaved={()=>{setShowCreateModal(false);setEditingPost(null);load()}} onCancel={()=>{setShowCreateModal(false);setEditingPost(null)}}/></div></div>}
   </div>
