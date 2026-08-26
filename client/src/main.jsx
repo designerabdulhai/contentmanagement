@@ -5,6 +5,7 @@ import BulkCreate from './components/BulkCreate'
 import './styles.css'
 import './post-form-fix.css'
 import './mobile-responsive.css'
+import './mobile-list-card.css'
 
 createRoot(document.getElementById('root')).render(
   React.createElement(App)
