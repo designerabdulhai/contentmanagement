@@ -16,6 +16,14 @@ function formatTime(value){
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
 }
+function firstDate(post, keys){
+  for(const key of keys){
+    if(!post?.[key]) continue;
+    const d = new Date(post[key]);
+    if(!Number.isNaN(d.getTime())) return d;
+  }
+  return null;
+}
 function startOfWeek(date){
   const d = new Date(date);
   d.setHours(0,0,0,0);
@@ -28,6 +36,21 @@ function startOfMonth(date){
   d.setHours(0,0,0,0);
   d.setDate(1);
   return d;
+}
+
+function PostTimes({post}){
+  const scheduled = firstDate(post,['scheduled_at']);
+  const uploaded = firstDate(post,['uploaded_at','uploadedAt']);
+  const posted = firstDate(post,['posted_at','postedAt','published_at','publishedAt']);
+  const updated = firstDate(post,['updated_at','updatedAt']);
+
+  return (
+    <div className="post-time-stack">
+      {scheduled && <span><strong>Scheduled</strong> {formatTime(scheduled)}</span>}
+      {(uploaded || (post.status === 'Uploaded' && updated)) && <span><strong>Uploaded</strong> {formatTime(uploaded || updated)}</span>}
+      {posted && <span><strong>Posted</strong> {formatTime(posted)}</span>}
+    </div>
+  );
 }
 
 export default function ListView(){
@@ -195,7 +218,7 @@ export default function ListView(){
                     <tr key={p.id}>
                       <td>{p.project_name}</td><td>{p.content_type}</td><td>{p.channel}</td><td>{p.platform}</td>
                       <td><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select></td>
-                      <td>{formatTime(p.scheduled_at)}</td>
+                      <td><PostTimes post={p}/></td>
                       <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link}/></div></td>
                       <td>{p.owner}</td>
                       {actionButtons(p)}
@@ -210,12 +233,12 @@ export default function ListView(){
       ) : (
         <div className="table-wrap card">
           <table className="posts">
-            <thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Date</th><th>Uploaded Link</th><th>Owner</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Date / Time</th><th>Uploaded Link</th><th>Owner</th><th>Actions</th></tr></thead>
             <tbody>{filteredPosts.map(p=>(
               <tr key={p.id}>
                 <td>{p.project_name}</td><td>{p.content_type}</td><td>{p.channel}</td><td>{p.platform}</td>
                 <td><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select></td>
-                <td>{p.scheduled_at}</td>
+                <td><PostTimes post={p}/></td>
                 <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="link-text" title={p.uploaded_link||''}>{p.uploaded_link||''}</div><LinkActions url={p.uploaded_link}/></div></td>
                 <td>{p.owner}</td>{actionButtons(p)}
               </tr>
