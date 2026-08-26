@@ -1,6 +1,7 @@
 import React, {useEffect, useState, useRef} from 'react'
 import api from '../api'
 import LinkActions from './LinkActions'
+import './PostForm.css'
 
 function toDateTimeLocal(value){
   if(!value) return '';
@@ -149,11 +150,15 @@ export default function PostForm({onSaved,onCancel}){
       applySuggestion(cached);
       return;
     }
+
     const requestId = ++requestSeqRef.current;
     setSuggestionLoading(true);
     setShowSuggestions(true);
+
     const buildSuggestions = (rows)=>{
-      const matching = (Array.isArray(rows) ? rows : []).filter(row=>String(row?.project_name || '').toLowerCase().includes(key));
+      const matching = (Array.isArray(rows) ? rows : []).filter(row=>
+        String(row?.project_name || '').toLowerCase().includes(key)
+      );
       const map = new Map();
       matching.forEach(row=>{
         const name = String(row.project_name || '').trim();
@@ -162,7 +167,12 @@ export default function PostForm({onSaved,onCancel}){
         const item = map.get(name);
         item.count += 1;
         if(row.scheduled_at){
-          item.last_scheduled_dates.push({scheduled_at: row.scheduled_at, content_type: row.content_type || '', channel: row.channel || '', status: row.status || ''});
+          item.last_scheduled_dates.push({
+            scheduled_at: row.scheduled_at,
+            content_type: row.content_type || '',
+            channel: row.channel || '',
+            status: row.status || ''
+          });
         }
       });
       return Array.from(map.values()).map(item=>{
@@ -176,16 +186,19 @@ export default function PostForm({onSaved,onCancel}){
         return dateB-dateA || a.project_name.localeCompare(b.project_name);
       }).slice(0,20);
     };
+
     const finish = (rows)=>{
       if(requestId !== requestSeqRef.current) return;
       const data = buildSuggestions(rows);
       suggestionsCache.current[key] = data;
       applySuggestion(data);
     };
+
     if(Array.isArray(projectPostsCache.current)){
       finish(projectPostsCache.current);
       return;
     }
+
     api.get('/posts').then(res=>{
       if(requestId !== requestSeqRef.current) return;
       const rows = Array.isArray(res.data) ? res.data : [];
@@ -251,62 +264,70 @@ export default function PostForm({onSaved,onCancel}){
   };
 
   return (
-    <div className="postform drawer post-form-modern" onKeyDown={handleKeyDown} tabIndex={-1}>
-      <div className="post-form-head">
-        <div>
-          <h3 id="create-post-title">{post.id ? 'Edit Post' : 'Create New Post'}</h3>
-          <p>{post.id ? 'Update the content details and publishing time.' : 'Add a content item and choose when it should be published.'}</p>
-        </div>
-        <button type="button" className="post-form-close" aria-label="Close" onClick={cancel}>×</button>
-      </div>
-
-      {loadingSettings && <div className="setting-help post-form-notice">Loading form options…</div>}
-      {settingsError && <div className="setting-help form-error post-form-notice">{settingsError}</div>}
-
-      <div className="post-form-section">
-        <div className="post-form-section-title">Content details</div>
-        <div className="form-grid post-form-grid">
-          <div className="project-field">
-            <label>Project Name</label>
-            <input placeholder="e.g. HHD883" value={post.project_name||''} autoComplete="off" onChange={e=>onProjectNameChange(e.target.value)} onFocus={e=>{ if(e.target.value.trim()) queryProjectSuggestions(e.target.value); }} onClick={e=>{ if(e.target.value.trim()) queryProjectSuggestions(e.target.value); }} />
-            {showSuggestions && (
-              <div className="suggestions-dropdown">
-                {suggestionLoading ? <div className="suggestion-loading">Searching projects…</div> : suggestions.length > 0 ? suggestions.map(s=> (
+    <div className="postform drawer" onKeyDown={handleKeyDown} tabIndex={-1}>
+      <h3 id="create-post-title">{post.id? 'Edit Post':'Create New Post'}</h3>
+      {loadingSettings && <div className="setting-help">Loading form options…</div>}
+      {settingsError && <div className="setting-help form-error">{settingsError}</div>}
+      <div className="form-grid">
+        <div className="project-field">
+          <input placeholder="Project Name" value={post.project_name||''} autoComplete="off" onChange={e=>onProjectNameChange(e.target.value)} onFocus={e=>{ if(e.target.value.trim()) queryProjectSuggestions(e.target.value); }} onClick={e=>{ if(e.target.value.trim()) queryProjectSuggestions(e.target.value); }} />
+          {showSuggestions && (
+            <div className="suggestions-dropdown">
+              {suggestionLoading ? (
+                <div className="suggestion-loading">Searching projects…</div>
+              ) : suggestions.length > 0 ? (
+                suggestions.map(s=> (
                   <button type="button" key={s.project_name} className="suggestion-item" onMouseDown={e=>e.preventDefault()} onClick={()=>selectSuggestion(s)}>
                     <span className="suggestion-name">{s.project_name}</span>
                     <span className="suggestion-meta"><span>{s.count} past {s.count===1?'schedule':'schedules'}</span>{s.last_scheduled_at && <span className="suggestion-date">Last: {formatSuggestedDate(s.last_scheduled_at)}</span>}</span>
                   </button>
-                )) : <div className="suggestion-empty">No previous project found</div>}
-              </div>
-            )}
-            {selectedProjectPanel && panelOpen && renderProjectHistory(selectedProjectPanel)}
-          </div>
-
-          <label className="post-field"><span>Content Type</span><select value={post.content_type||''} onChange={e=>setPost({...post, content_type:e.target.value})} disabled={loadingSettings}><option value="">Select content type</option>{contentTypes.map((s,index)=><option key={`${s}-${index}`} value={s}>{s}</option>)}</select></label>
-          <label className="post-field"><span>Channel</span><select value={post.channel||''} onChange={e=>setPost({...post, channel:e.target.value})} disabled={loadingSettings}><option value="">Select channel</option>{channels.map((s,index)=><option key={`${s}-${index}`} value={s}>{s}</option>)}</select></label>
-          <label className="post-field"><span>Platform</span><select value={post.platform||''} onChange={e=>setPost({...post, platform:e.target.value})} disabled={loadingSettings}><option value="">Select platform</option>{platforms.map((s,index)=><option key={`${s}-${index}`} value={s}>{s}</option>)}</select></label>
+                ))
+              ) : (
+                <div className="suggestion-empty">No previous project found</div>
+              )}
+            </div>
+          )}
+          {selectedProjectPanel && panelOpen && renderProjectHistory(selectedProjectPanel)}
         </div>
-      </div>
 
-      <div className="post-form-section post-form-publish-section">
-        <div className="post-form-section-title">Publishing</div>
-        <div className="post-publish-grid">
-          <label className="post-field"><span>Status</span><select value={post.status||''} onChange={e=>setPost({...post, status:e.target.value})}><option value="Listed">Listed</option><option value="Scheduled">Scheduled</option><option value="Uploaded">Uploaded</option></select></label>
-          <label className="post-field schedule-field"><span>Schedule Date &amp; Time</span><input id="schedule-datetime" type="datetime-local" value={post.scheduled_at||''} onChange={e=>setPost({...post, scheduled_at:e.target.value})} /></label>
+        <select value={post.content_type||''} onChange={e=>setPost({...post, content_type:e.target.value})} disabled={loadingSettings}>
+          <option value="">Select content type</option>
+          {contentTypes.map((s, index)=> <option key={`${s}-${index}`} value={s}>{s}</option>)}
+        </select>
+
+        <div className="template-row">
+          <select onChange={e=>useTemplate(e.target.value)} defaultValue="" disabled={loadingSettings}>
+            <option value="">Use Template</option>
+            {templates.map((t,index)=> <option key={t.id ?? index} value={t.id}>{t.name}</option>)}
+          </select>
+          <button className="btn-secondary" type="button" onClick={saveTemplate}>Save as Template</button>
         </div>
-      </div>
 
-      <div className="post-form-section">
-        <div className="post-form-section-title">Link & notes</div>
-        <div className="uploaded-link-field post-link-row">
+        <select value={post.channel||''} onChange={e=>setPost({...post, channel:e.target.value})} disabled={loadingSettings}>
+          <option value="">Select channel</option>
+          {channels.map((s,index)=> <option key={`${s}-${index}`} value={s}>{s}</option>)}
+        </select>
+        <select value={post.platform||''} onChange={e=>setPost({...post, platform:e.target.value})} disabled={loadingSettings}>
+          <option value="">Select platform</option>
+          {platforms.map((s,index)=> <option key={`${s}-${index}`} value={s}>{s}</option>)}
+        </select>
+        <select value={post.status||''} onChange={e=>setPost({...post, status:e.target.value})}>
+          <option value="Listed">Listed</option>
+          <option value="Scheduled">Scheduled</option>
+          <option value="Uploaded">Uploaded</option>
+        </select>
+        <div className="schedule-field">
+          <label htmlFor="schedule-datetime">Schedule Date &amp; Time</label>
+          <input id="schedule-datetime" type="datetime-local" value={post.scheduled_at||''} onChange={e=>setPost({...post, scheduled_at:e.target.value})} />
+        </div>
+        <div className="uploaded-link-field">
           <input placeholder="Paste uploaded or published link" value={post.uploaded_link||''} onChange={e=>setPost({...post, uploaded_link:e.target.value})} onPaste={onPasteLink} />
           <LinkActions url={post.uploaded_link} />
         </div>
         {autoFillHint && <div className="autofill-hint">{autoFillHint} <button type="button" onClick={()=>{ setPost({...post, channel:'', platform:''}); setAutoFillHint(null); }}>Undo</button></div>}
-        <textarea className="notes-field post-notes" placeholder="Add notes for this post…" value={post.notes||''} onChange={e=>setPost({...post, notes:e.target.value})} />
+        <textarea className="notes-field" placeholder="Add notes for this post..." value={post.notes||''} onChange={e=>setPost({...post, notes:e.target.value})} />
       </div>
-
-      <div className="form-actions post-form-actions">
+      <div className="form-actions">
         <button className="btn-secondary" type="button" onClick={cancel}>Cancel</button>
         <button className="btn-primary" type="button" onClick={save}>{post.id ? 'Save Changes' : 'Create Post'}</button>
       </div>
