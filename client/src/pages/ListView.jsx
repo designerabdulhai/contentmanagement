@@ -61,7 +61,6 @@ function startOfWeek(date){
 function startOfMonth(date){
   const d = new Date(date); d.setHours(0,0,0,0); d.setDate(1); return d;
 }
-
 function channelKey(value){ return String(value || '').trim().toLowerCase(); }
 function ChannelBadge({channel}){
   const key = channelKey(channel);
@@ -145,7 +144,7 @@ export default function ListView(){
   );
   const statusCell=p=><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select>;
   const tableRows=items=>items.map(p=>(
-    <tr key={p.id}>
+    <tr key={p.id} className={`channel-row channel-row-${channelKey(p.channel).replace(/[^a-z0-9]+/g,'-')}`}>
       <td>{p.project_name}</td><td>{p.content_type}</td><td><ChannelBadge channel={p.channel}/></td><td>{p.platform}</td><td>{statusCell(p)}</td><td><PostTimes post={p}/></td><td><LinkActions url={p.uploaded_link}/></td>{actionButtons(p)}
     </tr>
   ));
