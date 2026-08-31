@@ -1,10 +1,9 @@
 import axios from 'axios';
 
-// Normal API traffic stays on the same-origin Vercel proxy.
-// Post deletion is routed directly to the live Cloudflare Worker so the
-// delete action does not depend on the Vercel rewrite layer.
-const baseURL = '/api';
+// Use the live Cloudflare Worker directly so the List page does not wait on
+// the Vercel proxy before showing the existing post data.
 const WORKER_URL = 'https://contentmanagement-api.rubel-bhd1.workers.dev';
+const baseURL = `${WORKER_URL}/api`;
 const TOKEN_KEY = 'content_schedule_auth_token';
 
 const api = axios.create({
@@ -21,19 +20,6 @@ api.interceptors.request.use((config) => {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
-
-  // IMPORTANT: the Worker exposes the stable delete endpoint as
-  // POST /api/posts/:id/delete. Do not convert it to DELETE here.
-  // Calling the Worker directly also avoids the Vercel rewrite losing the
-  // dynamic /posts/:id/delete route.
-  const url = String(config.url || '');
-  const deleteMatch = url.match(/^\/posts\/(\d+)\/delete$/);
-  if (config.method?.toLowerCase() === 'post' && deleteMatch) {
-    config.baseURL = WORKER_URL;
-    config.method = 'post';
-    config.url = `/api/posts/${deleteMatch[1]}/delete`;
-  }
-
   return config;
 });
 
