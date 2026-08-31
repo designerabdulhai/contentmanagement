@@ -42,8 +42,6 @@ function firstDate(post, keys, assumeUtc=false){
 function getPostEvents(post){
   const status = statusKey(post?.status);
   const scheduled = firstDate(post, ['scheduled_at'], false);
-  // The form stores the user-selected Schedule Date & Time in scheduled_at.
-  // Do not use server-created/updated/uploaded timestamps for the displayed post time.
   if(status === 'uploaded') return scheduled ? [{type:'uploaded',label:'Uploaded',date:scheduled}] : [];
   if(status === 'scheduled') return scheduled ? [{type:'scheduled',label:'Scheduled',date:scheduled}] : [];
   if(status === 'posted') return scheduled ? [{type:'posted',label:'Posted',date:scheduled}] : [];
@@ -64,6 +62,12 @@ function startOfMonth(date){
   const d = new Date(date); d.setHours(0,0,0,0); d.setDate(1); return d;
 }
 
+function channelKey(value){ return String(value || '').trim().toLowerCase(); }
+function ChannelBadge({channel}){
+  const key = channelKey(channel);
+  return <span className={`channel-badge channel-${key.replace(/[^a-z0-9]+/g,'-')}`}>{channel || '—'}</span>;
+}
+
 export default function ListView(){
   const [posts,setPosts]=useState([]);
   const [filters,setFilters]=useState({search:'',channel:'',content_type:'',status:'',period:'all'});
@@ -77,12 +81,8 @@ export default function ListView(){
   const [myPostsOnly,setMyPostsOnly]=useState(localStorage.getItem('my_posts')==='1');
 
   const load=()=>api.get('/posts').then(r=>setPosts(Array.isArray(r.data)?r.data:[])).catch(()=>setPosts([]));
-
   useEffect(()=>{
     load();
-    // Keep the visible list in sync with the server-side scheduler.
-    // The backend checks every 30 seconds, so polling at the same interval
-    // makes Scheduled -> Uploaded appear automatically without a page refresh.
     const refreshTimer = window.setInterval(load, 30_000);
     const onOpen=()=>{setEditingPost(null);setShowCreateModal(true)};
     const onNav=()=>{
@@ -146,7 +146,7 @@ export default function ListView(){
   const statusCell=p=><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select>;
   const tableRows=items=>items.map(p=>(
     <tr key={p.id}>
-      <td>{p.project_name}</td><td>{p.content_type}</td><td>{p.channel}</td><td>{p.platform}</td><td>{statusCell(p)}</td><td><PostTimes post={p}/></td><td><LinkActions url={p.uploaded_link}/></td>{actionButtons(p)}
+      <td>{p.project_name}</td><td>{p.content_type}</td><td><ChannelBadge channel={p.channel}/></td><td>{p.platform}</td><td>{statusCell(p)}</td><td><PostTimes post={p}/></td><td><LinkActions url={p.uploaded_link}/></td>{actionButtons(p)}
     </tr>
   ));
 
