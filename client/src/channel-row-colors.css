@@ -1,16 +1,16 @@
-/* Channel-based row shading: nearly white, with only a whisper of channel color. */
+/* Channel-based row shading: ultra-minimal 0.5% tint, almost pure white. */
 .posts tr.channel-row-hhd > td {
-  background: rgba(37, 99, 235, 0.008) !important;
+  background: rgba(37, 99, 235, 0.005) !important;
 }
 
 .posts tr.channel-row-bhd > td {
-  background: rgba(139, 0, 0, 0.008) !important;
+  background: rgba(139, 0, 0, 0.005) !important;
 }
 
 .posts tr.channel-row-hhd:hover > td {
-  background: rgba(37, 99, 235, 0.022) !important;
+  background: rgba(37, 99, 235, 0.015) !important;
 }
 
 .posts tr.channel-row-bhd:hover > td {
-  background: rgba(139, 0, 0, 0.022) !important;
+  background: rgba(139, 0, 0, 0.015) !important;
 }
