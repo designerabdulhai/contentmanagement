@@ -76,8 +76,14 @@ export default function ListView(){
   const currentUserId=1;
   const [myPostsOnly,setMyPostsOnly]=useState(localStorage.getItem('my_posts')==='1');
 
+  const load=()=>api.get('/posts').then(r=>setPosts(Array.isArray(r.data)?r.data:[])).catch(()=>setPosts([]));
+
   useEffect(()=>{
     load();
+    // Keep the visible list in sync with the server-side scheduler.
+    // The backend checks every 30 seconds, so polling at the same interval
+    // makes Scheduled -> Uploaded appear automatically without a page refresh.
+    const refreshTimer = window.setInterval(load, 30_000);
     const onOpen=()=>{setEditingPost(null);setShowCreateModal(true)};
     const onNav=()=>{
       if(localStorage.getItem('list_filter_dueSoon')){setFilters(f=>({...f,dueSoon:true}));localStorage.removeItem('list_filter_dueSoon');}
@@ -85,14 +91,18 @@ export default function ListView(){
     window.addEventListener('openPostModal',onOpen);
     window.addEventListener('openPostModalOnly',onOpen);
     window.addEventListener('navigateToList',onNav);
-    return ()=>{window.removeEventListener('openPostModal',onOpen);window.removeEventListener('openPostModalOnly',onOpen);window.removeEventListener('navigateToList',onNav)};
+    return ()=>{
+      window.clearInterval(refreshTimer);
+      window.removeEventListener('openPostModal',onOpen);
+      window.removeEventListener('openPostModalOnly',onOpen);
+      window.removeEventListener('navigateToList',onNav)
+    };
   },[]);
   useEffect(()=>{
     if(!showCreateModal || !editingPost) return;
     const timer=window.setTimeout(()=>window.dispatchEvent(new CustomEvent('editPost',{detail:editingPost})),0);
     return ()=>window.clearTimeout(timer);
   },[showCreateModal,editingPost]);
-  const load=()=>api.get('/posts').then(r=>setPosts(Array.isArray(r.data)?r.data:[])).catch(()=>setPosts([]));
   const deletePost=async(id)=>{
     if(!id || deletingPostId) return;
     setDeleteError(''); setDeletingPostId(id);
