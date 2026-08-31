@@ -66,6 +66,12 @@ function ChannelBadge({channel}){
   const key = channelKey(channel);
   return <span className={`channel-badge channel-${key.replace(/[^a-z0-9]+/g,'-')}`}>{channel || '—'}</span>;
 }
+function channelRowStyle(channel){
+  const key = channelKey(channel);
+  if(key === 'hhd') return {background:'rgba(37,99,235,.055)'};
+  if(key === 'bhd') return {background:'rgba(139,0,0,.055)'};
+  return undefined;
+}
 
 export default function ListView(){
   const [posts,setPosts]=useState([]);
@@ -144,7 +150,7 @@ export default function ListView(){
   );
   const statusCell=p=><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select>;
   const tableRows=items=>items.map(p=>(
-    <tr key={p.id} className={`channel-row channel-row-${channelKey(p.channel).replace(/[^a-z0-9]+/g,'-')}`}>
+    <tr key={p.id} className={`channel-row channel-row-${channelKey(p.channel).replace(/[^a-z0-9]+/g,'-')}`} style={channelRowStyle(p.channel)}>
       <td>{p.project_name}</td><td>{p.content_type}</td><td><ChannelBadge channel={p.channel}/></td><td>{p.platform}</td><td>{statusCell(p)}</td><td><PostTimes post={p}/></td><td><LinkActions url={p.uploaded_link}/></td>{actionButtons(p)}
     </tr>
   ));
