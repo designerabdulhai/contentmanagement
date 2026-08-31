@@ -22,20 +22,26 @@ function startOfGrid(date){
   return new Date(date.getFullYear(), date.getMonth(), 1-first.getDay());
 }
 
-function toDate(value){
+function toDate(value, assumeUtc=false){
   if(!value) return null;
-  const d = new Date(value);
+  if(value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  let raw = String(value).trim();
+  if(!raw) return null;
+  // Database timestamps without timezone are UTC. The scheduled_at value is
+  // user-entered local Bangladesh time and must remain local.
+  if(assumeUtc && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw)) raw = raw.replace(' ','T') + 'Z';
+  const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function formatTime(value){
-  const d = toDate(value);
+  const d = value instanceof Date ? value : toDate(value);
   return d ? d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : '';
 }
 
 function formatDateTime(value){
-  const d = toDate(value);
-  return d ? d.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+  const d = value instanceof Date ? value : toDate(value);
+  return d ? d.toLocaleString([], {month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) : '';
 }
 
 function statusKey(status){
@@ -46,31 +52,21 @@ function statusKey(status){
   return '';
 }
 
-function firstDate(post, keys){
+function firstDate(post, keys, assumeUtc=false){
   for(const key of keys){
-    const d = toDate(post?.[key]);
+    const d = toDate(post?.[key], assumeUtc);
     if(d) return d;
-  }
-  return null;
-}
-
-function firstDateKey(post, keys){
-  for(const key of keys){
-    const d = toDate(post?.[key]);
-    if(d) return key;
   }
   return null;
 }
 
 function eventForPost(post, filter){
   const status = statusKey(post?.status);
-  const scheduled = firstDate(post, ['scheduled_at']);
-  const uploadedKey = firstDateKey(post, ['uploaded_at','uploadedAt','upload_time','uploadTime','uploaded_time','uploadedTime','upload_at','uploadAt']);
-  const uploaded = uploadedKey ? toDate(post?.[uploadedKey]) : null;
-  const postedKey = firstDateKey(post, ['posted_at','postedAt','published_at','publishedAt','post_time','postTime','published_time','publishedTime']);
-  const posted = postedKey ? toDate(post?.[postedKey]) : null;
-  const created = firstDate(post, ['created_at','createdAt']);
-  const updated = firstDate(post, ['updated_at','updatedAt']);
+  const scheduled = firstDate(post, ['scheduled_at'], false);
+  const uploaded = firstDate(post, ['uploaded_at','uploadedAt','upload_time','uploadTime','uploaded_time','uploadedTime','upload_at','uploadAt'], true);
+  const posted = firstDate(post, ['posted_at','postedAt','published_at','publishedAt','post_time','postTime','published_time','publishedTime'], true);
+  const created = firstDate(post, ['created_at','createdAt'], true);
+  const updated = firstDate(post, ['updated_at','updatedAt'], true);
 
   const currentEvent = (() => {
     if(status === 'uploaded') {
