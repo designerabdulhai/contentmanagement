@@ -1,0 +1,16 @@
+/* Channel-based row shading: a soft tint of each channel's main color. */
+.posts tr.channel-row-hhd > td {
+  background: rgba(37, 99, 235, 0.075) !important;
+}
+
+.posts tr.channel-row-bhd > td {
+  background: rgba(139, 0, 0, 0.075) !important;
+}
+
+.posts tr.channel-row-hhd:hover > td {
+  background: rgba(37, 99, 235, 0.12) !important;
+}
+
+.posts tr.channel-row-bhd:hover > td {
+  background: rgba(139, 0, 0, 0.12) !important;
+}
