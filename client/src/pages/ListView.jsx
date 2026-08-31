@@ -68,13 +68,14 @@ function ChannelBadge({channel}){
 }
 function channelRowStyle(channel){
   const key = channelKey(channel);
-  if(key === 'hhd') return {background:'rgba(37,99,235,.055)'};
-  if(key === 'bhd') return {background:'rgba(139,0,0,.055)'};
+  if(key === 'hhd') return {background:'rgba(37,99,235,.005)'};
+  if(key === 'bhd') return {background:'rgba(139,0,0,.005)'};
   return undefined;
 }
 
 export default function ListView(){
   const [posts,setPosts]=useState([]);
+  const [postsLoading,setPostsLoading]=useState(true);
   const [filters,setFilters]=useState({search:'',channel:'',content_type:'',status:'',period:'all'});
   const [showCreateModal,setShowCreateModal]=useState(false);
   const [editingPost,setEditingPost]=useState(null);
@@ -85,7 +86,12 @@ export default function ListView(){
   const currentUserId=1;
   const [myPostsOnly,setMyPostsOnly]=useState(localStorage.getItem('my_posts')==='1');
 
-  const load=()=>api.get('/posts').then(r=>setPosts(Array.isArray(r.data)?r.data:[])).catch(()=>setPosts([]));
+  const load=()=>{
+    return api.get('/posts')
+      .then(r=>setPosts(Array.isArray(r.data)?r.data:[]))
+      .catch(()=>setPosts([]))
+      .finally(()=>setPostsLoading(false));
+  };
   useEffect(()=>{
     load();
     const refreshTimer = window.setInterval(load, 30_000);
@@ -171,7 +177,7 @@ export default function ListView(){
     </div>
     <div style={{display:'flex',justifyContent:'flex-end',gap:6,marginBottom:10}}>{[['all','All'],['week','This Week'],['month','This Month']].map(([value,label])=><button key={value} type="button" className={filters.period===value?'active':''} onClick={()=>setFilters(f=>({...f,period:value}))} style={{padding:'6px 10px',borderRadius:8,border:'1px solid #ddd',background:filters.period===value?'#eeeaff':'#fff',fontWeight:600}}>{label}</button>)}</div>
     {deleteError&&<div className="card" style={{marginBottom:12,padding:'10px 14px',color:'#b42318',background:'#fff1f0'}}>{deleteError}</div>}
-    {groupByDate ? <div className="date-groups">
+    {postsLoading ? <div className="card empty-state" aria-live="polite">Loading posts…</div> : groupByDate ? <div className="date-groups">
       {groups.map(([day,items])=><section className="date-group" key={day}>
         <div className="date-group-header"><div><h3>{day}</h3><span>{items.length} {items.length===1?'post':'posts'}</span></div></div>
         <div className="table-wrap card date-group-table"><table className="posts"><thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Time</th><th>Link</th><th>Actions</th></tr></thead><tbody>{tableRows(items)}</tbody></table></div>
