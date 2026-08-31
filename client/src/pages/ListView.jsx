@@ -68,8 +68,8 @@ function ChannelBadge({channel}){
 }
 function channelRowStyle(channel){
   const key = channelKey(channel);
-  if(key === 'hhd') return {background:'rgba(37,99,235,.005)'};
-  if(key === 'bhd') return {background:'rgba(139,0,0,.005)'};
+  if(key === 'hhd') return {background:'rgba(37,99,235,.01)'};
+  if(key === 'bhd') return {background:'rgba(139,0,0,.01)'};
   return undefined;
 }
 
@@ -86,12 +86,7 @@ export default function ListView(){
   const currentUserId=1;
   const [myPostsOnly,setMyPostsOnly]=useState(localStorage.getItem('my_posts')==='1');
 
-  const load=()=>{
-    return api.get('/posts')
-      .then(r=>setPosts(Array.isArray(r.data)?r.data:[]))
-      .catch(()=>setPosts([]))
-      .finally(()=>setPostsLoading(false));
-  };
+  const load=()=>api.get('/posts').then(r=>setPosts(Array.isArray(r.data)?r.data:[])).catch(()=>setPosts([])).finally(()=>setPostsLoading(false));
   useEffect(()=>{
     load();
     const refreshTimer = window.setInterval(load, 30_000);
@@ -102,30 +97,19 @@ export default function ListView(){
     window.addEventListener('openPostModal',onOpen);
     window.addEventListener('openPostModalOnly',onOpen);
     window.addEventListener('navigateToList',onNav);
-    return ()=>{
-      window.clearInterval(refreshTimer);
-      window.removeEventListener('openPostModal',onOpen);
-      window.removeEventListener('openPostModalOnly',onOpen);
-      window.removeEventListener('navigateToList',onNav)
-    };
+    return ()=>{window.clearInterval(refreshTimer);window.removeEventListener('openPostModal',onOpen);window.removeEventListener('openPostModalOnly',onOpen);window.removeEventListener('navigateToList',onNav)};
   },[]);
-  useEffect(()=>{
-    if(!showCreateModal || !editingPost) return;
-    const timer=window.setTimeout(()=>window.dispatchEvent(new CustomEvent('editPost',{detail:editingPost})),0);
-    return ()=>window.clearTimeout(timer);
-  },[showCreateModal,editingPost]);
+  useEffect(()=>{if(!showCreateModal || !editingPost) return;const timer=window.setTimeout(()=>window.dispatchEvent(new CustomEvent('editPost',{detail:editingPost})),0);return ()=>window.clearTimeout(timer)},[showCreateModal,editingPost]);
   const deletePost=async(id)=>{
     if(!id || deletingPostId) return;
     setDeleteError(''); setDeletingPostId(id);
     try{
       const token=localStorage.getItem(TOKEN_KEY)||'';
       const response=await fetch(`/api/posts/${encodeURIComponent(id)}`,{method:'DELETE',headers:{Accept:'application/json',...(token?{Authorization:`Bearer ${token}`}:{})}});
-      const text=await response.text(); let data=null;
-      try{data=text?JSON.parse(text):null}catch{data=null}
+      const text=await response.text(); let data=null; try{data=text?JSON.parse(text):null}catch{data=null}
       if(!response.ok || !data?.deleted) throw new Error(data?.error||data?.message||text||`Delete failed (${response.status})`);
       setPosts(current=>current.filter(post=>Number(post.id)!==Number(id)));
-    }catch(error){setDeleteError(error?.message||'Unable to delete post');await load()}
-    finally{setDeletingPostId(null)}
+    }catch(error){setDeleteError(error?.message||'Unable to delete post');await load()} finally{setDeletingPostId(null)}
   };
   const filteredPosts=useMemo(()=>{
     const now=new Date(); const weekStart=startOfWeek(now); const nextWeek=new Date(weekStart); nextWeek.setDate(nextWeek.getDate()+7);
@@ -136,54 +120,10 @@ export default function ListView(){
       return (!filters.search||(p.project_name||'').toLowerCase().includes(filters.search.toLowerCase())) && (!filters.channel||p.channel===filters.channel) && (!filters.content_type||p.content_type===filters.content_type) && (!filters.status||p.status===filters.status) && (!myPostsOnly||p.created_by==currentUserId) && inPeriod;
     });
   },[posts,filters,myPostsOnly]);
-  const groups=useMemo(()=>{
-    const map={};
-    filteredPosts.forEach(post=>{const primary=displayDate(post);const key=primary?formatDayLabel(primary):'No date';(map[key] ||= []).push(post)});
-    return Object.entries(map).sort((a,b)=>{if(a[0]==='No date')return 1;if(b[0]==='No date')return -1;const ad=displayDate(a[1][0])||new Date(0);const bd=displayDate(b[1][0])||new Date(0);return bd-ad});
-  },[filteredPosts]);
-  const changeStatus=async(post,status)=>{
-    if(!post?.id||!status||status===post.status)return;
-    setUpdatingStatus(post.id);
-    try{const r=await api.put('/posts/'+post.id,{...post,status});const updated=r?.data||{...post,status};setPosts(current=>current.map(item=>item.id===post.id?updated:item))}catch(e){}
-    finally{setUpdatingStatus(null)}
-  };
-  const actionButtons=p=>(
-    <td className="actions">
-      <button type="button" title="Edit" onClick={()=>{setEditingPost(p);setShowCreateModal(true)}}>✏️</button>
-      <button type="button" title="Duplicate" onClick={()=>api.post('/posts/'+p.id+'/duplicate').then(()=>load()).catch(()=>{})}>⎘</button>
-      <button type="button" title="Delete" aria-label={`Delete ${p.project_name||'post'}`} disabled={deletingPostId===p.id||deletingPostId!==null} onClick={e=>{e.preventDefault();e.stopPropagation();deletePost(p.id)}}>{deletingPostId===p.id?'…':'🗑️'}</button>
-    </td>
-  );
+  const groups=useMemo(()=>{const map={};filteredPosts.forEach(post=>{const primary=displayDate(post);const key=primary?formatDayLabel(primary):'No date';(map[key] ||= []).push(post)});return Object.entries(map).sort((a,b)=>{if(a[0]==='No date')return 1;if(b[0]==='No date')return -1;const ad=displayDate(a[1][0])||new Date(0);const bd=displayDate(b[1][0])||new Date(0);return bd-ad})},[filteredPosts]);
+  const changeStatus=async(post,status)=>{if(!post?.id||!status||status===post.status)return;setUpdatingStatus(post.id);try{const r=await api.put('/posts/'+post.id,{...post,status});const updated=r?.data||{...post,status};setPosts(current=>current.map(item=>item.id===post.id?updated:item))}catch(e){}finally{setUpdatingStatus(null)}};
+  const actionButtons=p=><td className="actions"><button type="button" title="Edit" onClick={()=>{setEditingPost(p);setShowCreateModal(true)}}>✏️</button><button type="button" title="Duplicate" onClick={()=>api.post('/posts/'+p.id+'/duplicate').then(()=>load()).catch(()=>{})}>⎘</button><button type="button" title="Delete" aria-label={`Delete ${p.project_name||'post'}`} disabled={deletingPostId===p.id||deletingPostId!==null} onClick={e=>{e.preventDefault();e.stopPropagation();deletePost(p.id)}}>{deletingPostId===p.id?'…':'🗑️'}</button></td>;
   const statusCell=p=><select className={`inline-status ${p.status?.toLowerCase()||''}`} value={p.status||''} onChange={e=>changeStatus(p,e.target.value)} disabled={updatingStatus===p.id}>{STATUS_OPTIONS.map(status=><option key={status} value={status}>{status}</option>)}</select>;
-  const tableRows=items=>items.map(p=>(
-    <tr key={p.id} className={`channel-row channel-row-${channelKey(p.channel).replace(/[^a-z0-9]+/g,'-')}`} style={channelRowStyle(p.channel)}>
-      <td>{p.project_name}</td><td>{p.content_type}</td><td><ChannelBadge channel={p.channel}/></td><td>{p.platform}</td><td>{statusCell(p)}</td><td><PostTimes post={p}/></td><td><LinkActions url={p.uploaded_link}/></td>{actionButtons(p)}
-    </tr>
-  ));
-
-  return <div className="page listview">
-    <div className="list-header">
-      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-        <input className="search" placeholder="Search posts" value={filters.search} onChange={e=>setFilters({...filters,search:e.target.value})}/>
-        <button className={myPostsOnly?'active':''} type="button" onClick={()=>setMyPostsOnly(s=>{const v=!s;localStorage.setItem('my_posts',v?'1':'0');return v})}>My Posts</button>
-        <button className={groupByDate?'active':''} type="button" onClick={()=>setGroupByDate(v=>!v)}>{groupByDate?'Date grouped':'Table view'}</button>
-      </div>
-      <div className="list-actions">
-        <button className="list-tool-btn" type="button">Sort</button>
-        <button className={`list-tool-btn ${filters.period!=='all'?'active':''}`} type="button" onClick={()=>setFilters(f=>({...f,period:f.period==='all'?'week':f.period==='week'?'month':'all'}))} title="Filter by week or month">{filters.period==='week'?'This Week':filters.period==='month'?'This Month':'Filters'}</button>
-        <button className="btn-secondary" type="button" onClick={()=>window.dispatchEvent(new CustomEvent('requestBulkCreate'))}>Bulk</button>
-        <button className="btn-primary" type="button" onClick={()=>{setEditingPost(null);setShowCreateModal(true)}}><span className="new-post-plus">+</span> New Scheduled Post <span className="fab-shortcut">N</span></button>
-      </div>
-    </div>
-    <div style={{display:'flex',justifyContent:'flex-end',gap:6,marginBottom:10}}>{[['all','All'],['week','This Week'],['month','This Month']].map(([value,label])=><button key={value} type="button" className={filters.period===value?'active':''} onClick={()=>setFilters(f=>({...f,period:value}))} style={{padding:'6px 10px',borderRadius:8,border:'1px solid #ddd',background:filters.period===value?'#eeeaff':'#fff',fontWeight:600}}>{label}</button>)}</div>
-    {deleteError&&<div className="card" style={{marginBottom:12,padding:'10px 14px',color:'#b42318',background:'#fff1f0'}}>{deleteError}</div>}
-    {postsLoading ? <div className="card empty-state" aria-live="polite">Loading posts…</div> : groupByDate ? <div className="date-groups">
-      {groups.map(([day,items])=><section className="date-group" key={day}>
-        <div className="date-group-header"><div><h3>{day}</h3><span>{items.length} {items.length===1?'post':'posts'}</span></div></div>
-        <div className="table-wrap card date-group-table"><table className="posts"><thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Time</th><th>Link</th><th>Actions</th></tr></thead><tbody>{tableRows(items)}</tbody></table></div>
-      </section>)}
-      {groups.length===0&&<div className="card empty-state">No posts found.</div>}
-    </div> : <div className="table-wrap card"><table className="posts"><thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Date / Time</th><th>Link</th><th>Actions</th></tr></thead><tbody>{tableRows(filteredPosts)}</tbody></table></div>}
-    {showCreateModal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget){setShowCreateModal(false);setEditingPost(null)}}}><div className="modal create-post-modal" role="dialog" aria-modal="true"><PostForm onSaved={()=>{setShowCreateModal(false);setEditingPost(null);load()}} onCancel={()=>{setShowCreateModal(false);setEditingPost(null)}}/></div></div>}
-  </div>
+  const tableRows=items=>items.map(p=><tr key={p.id} className={`channel-row channel-row-${channelKey(p.channel).replace(/[^a-z0-9]+/g,'-')}`} style={channelRowStyle(p.channel)}><td>{p.project_name}</td><td>{p.content_type}</td><td><ChannelBadge channel={p.channel}/></td><td>{p.platform}</td><td>{statusCell(p)}</td><td><PostTimes post={p}/></td><td><LinkActions url={p.uploaded_link}/></td>{actionButtons(p)}</tr>);
+  return <div className="page listview"><div className="list-header"><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><input className="search" placeholder="Search posts" value={filters.search} onChange={e=>setFilters({...filters,search:e.target.value})}/><button className={myPostsOnly?'active':''} type="button" onClick={()=>setMyPostsOnly(s=>{const v=!s;localStorage.setItem('my_posts',v?'1':'0');return v})}>My Posts</button><button className={groupByDate?'active':''} type="button" onClick={()=>setGroupByDate(v=>!v)}>{groupByDate?'Date grouped':'Table view'}</button></div><div className="list-actions"><button className="list-tool-btn" type="button">Sort</button><button className={`list-tool-btn ${filters.period!=='all'?'active':''}`} type="button" onClick={()=>setFilters(f=>({...f,period:f.period==='all'?'week':f.period==='week'?'month':'all'}))} title="Filter by week or month">{filters.period==='week'?'This Week':filters.period==='month'?'This Month':'Filters'}</button><button className="btn-secondary" type="button" onClick={()=>window.dispatchEvent(new CustomEvent('requestBulkCreate'))}>Bulk</button><button className="btn-primary" type="button" onClick={()=>{setEditingPost(null);setShowCreateModal(true)}}><span className="new-post-plus">+</span> New Scheduled Post <span className="fab-shortcut">N</span></button></div></div><div style={{display:'flex',justifyContent:'flex-end',gap:6,marginBottom:10}}>{[['all','All'],['week','This Week'],['month','This Month']].map(([value,label])=><button key={value} type="button" className={filters.period===value?'active':''} onClick={()=>setFilters(f=>({...f,period:value}))} style={{padding:'6px 10px',borderRadius:8,border:'1px solid #ddd',background:filters.period===value?'#eeeaff':'#fff',fontWeight:600}}>{label}</button>)}</div>{deleteError&&<div className="card" style={{marginBottom:12,padding:'10px 14px',color:'#b42318',background:'#fff1f0'}}>{deleteError}</div>}{postsLoading ? <div className="posts-loading" aria-live="polite" /> : groupByDate ? <div className="date-groups">{groups.map(([day,items])=><section className="date-group" key={day}><div className="date-group-header"><div><h3>{day}</h3><span>{items.length} {items.length===1?'post':'posts'}</span></div></div><div className="table-wrap card date-group-table"><table className="posts"><thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Time</th><th>Link</th><th>Actions</th></tr></thead><tbody>{tableRows(items)}</tbody></table></div></section>)}{groups.length===0&&<div className="card empty-state">No posts found.</div>}</div> : <div className="table-wrap card"><table className="posts"><thead><tr><th>Project</th><th>Type</th><th>Channel</th><th>Platform</th><th>Status</th><th>Date / Time</th><th>Link</th><th>Actions</th></tr></thead><tbody>{tableRows(filteredPosts)}</tbody></table></div>}{showCreateModal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget){setShowCreateModal(false);setEditingPost(null)}}}><div className="modal create-post-modal" role="dialog" aria-modal="true"><PostForm onSaved={()=>{setShowCreateModal(false);setEditingPost(null);load()}} onCancel={()=>{setShowCreateModal(false);setEditingPost(null)}}/></div></div>}</div>
 }
