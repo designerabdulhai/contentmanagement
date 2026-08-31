@@ -3,6 +3,7 @@ const cors = require('cors');
 const crypto = require('crypto');
 const path = require('path');
 const Database = require('better-sqlite3');
+const { syncScheduledPosts } = require('./scheduler');
 
 const app = express();
 const db = new Database('data.sqlite');
@@ -50,6 +51,23 @@ const requireAuth = (req, res, next) => {
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Keep scheduled-post state correct even when nobody is viewing the app.
+// Runs every 30 seconds using the server's clock (UTC, matching SQLite datetime('now')).
+syncScheduledPosts();
+setInterval(() => {
+  try {
+    syncScheduledPosts();
+  } catch (error) {
+    console.error('scheduled status sync failed', error);
+  }
+}, 30_000);
+
+// Also sync immediately before listing posts so the UI never shows stale status.
+const syncBeforeList = (req, res, next) => {
+  try { syncScheduledPosts(); } catch (error) { console.error('scheduled status sync failed', error); }
+  next();
+};
+
 app.post('/api/auth/login', (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
@@ -73,7 +91,7 @@ app.post('/api/auth/logout', requireAuth, (req, res) => {
 
 app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: req.user }));
 
-app.get('/api/posts', requireAuth, (req, res) => {
+app.get('/api/posts', requireAuth, syncBeforeList, (req, res) => {
   const rows = db.prepare(`
     SELECT p.*, u.display_name AS owner FROM posts p LEFT JOIN users u ON p.created_by = u.id
     ORDER BY p.scheduled_at IS NULL, p.scheduled_at
@@ -146,8 +164,9 @@ app.post('/api/posts/:id/notes', requireAuth, requireId, (req, res) => {
   res.status(201).json(db.prepare(`SELECT pn.*, u.display_name AS user_name FROM post_notes pn LEFT JOIN users u ON pn.user_id = u.id WHERE pn.id = ?`).get(info.lastInsertRowid));
 });
 
-app.get('/api/dashboard/due-soon', requireAuth, (req, res) => res.json(db.prepare(`SELECT p.*, u.display_name AS owner FROM posts p LEFT JOIN users u ON p.created_by = u.id WHERE p.scheduled_at IS NOT NULL AND p.scheduled_at >= datetime('now') AND p.scheduled_at < datetime('now','+7 days') AND (p.status IS NULL OR p.status != 'Uploaded') ORDER BY p.scheduled_at ASC LIMIT 50`).all()));
+app.get('/api/dashboard/due-soon', requireAuth, syncBeforeList, (req, res) => res.json(db.prepare(`SELECT p.*, u.display_name AS owner FROM posts p LEFT JOIN users u ON p.created_by = u.id WHERE p.scheduled_at IS NOT NULL AND p.scheduled_at >= datetime('now') AND p.scheduled_at < datetime('now','+7 days') AND (p.status IS NULL OR p.status != 'Uploaded') ORDER BY p.scheduled_at ASC LIMIT 50`).all()));
 app.post('/api/overdue/check', requireAuth, (req, res) => {
+  try { syncScheduledPosts(); } catch (error) { console.error('scheduled status sync failed', error); }
   const info = db.prepare(`UPDATE posts SET is_overdue = CASE WHEN status = 'Scheduled' AND scheduled_at IS NOT NULL AND scheduled_at < datetime('now') THEN 1 ELSE 0 END`).run();
   res.json({ updated: info.changes });
 });
@@ -210,7 +229,7 @@ app.post('/api/invite', requireAuth, (req, res) => {
   res.status(201).json(db.prepare('SELECT id, email, role, status, created_at FROM invites WHERE id = ?').get(info.lastInsertRowid));
 });
 app.get('/api/invites', requireAuth, (req, res) => res.json(db.prepare('SELECT id, email, role, status, created_at FROM invites ORDER BY created_at DESC').all()));
-app.get('/api/summary', requireAuth, (req, res) => {
+app.get('/api/summary', requireAuth, syncBeforeList, (req, res) => {
   const total = db.prepare('SELECT COUNT(*) AS c FROM posts').get().c;
   const scheduledWeek = db.prepare("SELECT COUNT(*) AS c FROM posts WHERE scheduled_at >= datetime('now') AND scheduled_at < datetime('now','+7 days')").get().c;
   const uploadedMonth = db.prepare("SELECT COUNT(*) AS c FROM posts WHERE status='Uploaded' AND strftime('%Y-%m', created_at)=strftime('%Y-%m','now')").get().c;
