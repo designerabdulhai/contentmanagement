@@ -1,7 +1,10 @@
 name = "contentmanagement-api"
-main = "src/index.js"
+main = "src/entry.js"
 workers_dev = true
 compatibility_date = "2026-08-22"
+
+[triggers]
+crons = ["* * * * *"]
 
 [[d1_databases]]
 binding = "DB"
