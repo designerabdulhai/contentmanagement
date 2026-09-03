@@ -16,7 +16,8 @@ function emptyContent(){
     name:'',
     full_video_status:'', short_ex_status:'', short_top_status:'', style_ex_status:'', style_top_status:'',
     poster_status:'',
-    full_video:'', short_ex:'', short_top:'', style_ex:'', style_top:'', poster:''
+    document_link:'',
+    file_path:''
   }
 }
 
@@ -39,6 +40,24 @@ function StatusCell({item, field, status, onStatus}){
   </div>
 }
 
+async function copyPath(path){
+  const value = String(path || '').trim()
+  if (!value) return
+
+  try{
+    await navigator.clipboard.writeText(value)
+  }catch{
+    const textarea = document.createElement('textarea')
+    textarea.value = value
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    textarea.remove()
+  }
+}
+
 export default function Content(){
   const [items,setItems] = useState([])
   const [loading,setLoading] = useState(true)
@@ -56,7 +75,7 @@ export default function Content(){
 
   const visible = useMemo(()=>{
     const q = search.trim().toLowerCase()
-    return items.filter(item=>stageOf(item)===tab && (!q || [item.name,item.poster,item.full_video,item.short_ex,item.short_top,item.style_ex,item.style_top].some(v=>String(v||'').toLowerCase().includes(q))))
+    return items.filter(item=>stageOf(item)===tab && (!q || [item.name,item.document_link,item.file_path].some(v=>String(v||'').toLowerCase().includes(q))))
   },[items,tab,search])
 
   const save = async (payload) => {
@@ -111,7 +130,11 @@ export default function Content(){
         <td><StatusCell item={item} field="style_ex" status={item.style_ex_status} onStatus={updateStatus} /></td>
         <td><StatusCell item={item} field="style_top" status={item.style_top_status} onStatus={updateStatus} /></td>
         <td><StatusCell item={item} field="poster" status={item.poster_status} onStatus={updateStatus} /></td>
-        <td className="actions"><button type="button" title="Edit" onClick={()=>{setEditing(item);setShowModal(true)}}>✏️</button></td>
+        <td className="actions content-actions">
+          <button type="button" title={item.document_link ? 'Open Document' : 'Document link not set'} disabled={!item.document_link} onClick={()=>item.document_link && window.open(item.document_link,'_blank','noopener,noreferrer')}>↗</button>
+          <button type="button" title={item.file_path ? 'Copy Path Link' : 'File path not set'} disabled={!item.file_path} onClick={()=>copyPath(item.file_path)}>⧉</button>
+          <button type="button" title="Edit" onClick={()=>{setEditing(item);setShowModal(true)}}>✏️</button>
+        </td>
       </tr>)}</tbody></table>}
     </div>
 
@@ -133,7 +156,8 @@ function ContentModal({initial,saving,onCancel,onSave}){
           <label className="content-field"><span>Poster Status</span><StatusSelect value={form.poster_status} options={POSTER_STATUSES} onChange={value=>set('poster_status',value)} /></label>
         </div>
         <div className="content-form-links">
-          {['full_video','short_ex','short_top','style_ex','style_top','poster'].map(key=><label className="content-field" key={key}><span>{key.replaceAll('_',' ')} Link</span><input value={form[key]||''} onChange={e=>set(key,e.target.value)} placeholder="Optional URL" /></label>)}
+          <label className="content-field"><span>Document Link</span><input value={form.document_link||''} onChange={e=>set('document_link',e.target.value)} placeholder="Document URL" /></label>
+          <label className="content-field"><span>File Path</span><input value={form.file_path||''} onChange={e=>set('file_path',e.target.value)} placeholder="File path" /></label>
         </div>
         <div className="content-modal-actions"><button className="btn-secondary" type="button" onClick={onCancel}>Cancel</button><button className="btn-primary" type="submit" disabled={saving || !form.name.trim()}>{saving?'Saving…':initial.id?'Save Changes':'Add Content'}</button></div>
       </form>
