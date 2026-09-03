@@ -1,6 +1,7 @@
 import React, {useState, useEffect} from 'react'
 import Dashboard from './pages/Dashboard'
 import ListView from './pages/ListView'
+import Content from './pages/Content'
 import Settings from './pages/Settings'
 import CalendarView from './pages/CalendarView'
 import Login from './pages/Login'
@@ -10,7 +11,7 @@ import PostForm from './components/PostForm'
 import api, { TOKEN_KEY } from './api'
 
 const defaultProfile = { name: 'Owner Name', email: '', photo: '' };
-const ROUTES = new Set(['dashboard','list','calendar','settings']);
+const ROUTES = new Set(['dashboard','list','content','calendar','settings']);
 const ACTIVE_ROUTE_KEY = 'content_schedule_active_route';
 
 function profileFromSettings(data){
@@ -123,10 +124,11 @@ export default function App(){
     <div className="app-root layout-root">
       <Sidebar route={route} setRoute={navigate} theme={theme} setTheme={setTheme} />
       <div className="main-area">
-        <Topbar title={route==='dashboard'? 'Dashboard' : route==='list'? 'All Posts' : route==='settings'? 'Settings' : 'Calendar'} managers={managers} profile={profile} onLogout={logout} />
+        <Topbar title={route==='dashboard'? 'Dashboard' : route==='list'? 'All Posts' : route==='content' ? 'Content' : route==='settings'? 'Settings' : 'Calendar'} managers={managers} profile={profile} onLogout={logout} />
         <main className="main-content">
           {route==='dashboard' && <Dashboard />}
           {route==='list' && <ListView />}
+          {route==='content' && <Content />}
           {route==='settings' && <Settings />}
           {route==='calendar' && <CalendarView />}
         </main>
