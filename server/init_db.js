@@ -43,6 +43,27 @@ CREATE TABLE IF NOT EXISTS posts (
   FOREIGN KEY(created_by) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS contents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  full_video_status TEXT,
+  short_ex_status TEXT,
+  short_top_status TEXT,
+  style_ex_status TEXT,
+  style_top_status TEXT,
+  poster_status TEXT,
+  full_video TEXT,
+  short_ex TEXT,
+  short_top TEXT,
+  style_ex TEXT,
+  style_top TEXT,
+  poster TEXT,
+  created_by INTEGER,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY(created_by) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS invites (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   email TEXT,
@@ -87,12 +108,29 @@ INSERT OR IGNORE INTO settings(key, value) VALUES ('platforms', 'Meta,Google,Tik
 INSERT OR IGNORE INTO settings(key, value) VALUES ('statuses', 'Listed,Scheduled,Uploaded');
 `);
 
-// Backward-compatible migration for an existing database created before auth was added.
 try { db.exec('ALTER TABLE users ADD COLUMN password_hash TEXT'); } catch (_) {}
 try { db.exec('ALTER TABLE users ADD COLUMN password_salt TEXT'); } catch (_) {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS contents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  full_video_status TEXT,
+  short_ex_status TEXT,
+  short_top_status TEXT,
+  style_ex_status TEXT,
+  style_top_status TEXT,
+  poster_status TEXT,
+  full_video TEXT,
+  short_ex TEXT,
+  short_top TEXT,
+  style_ex TEXT,
+  style_top TEXT,
+  poster TEXT,
+  created_by INTEGER,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY(created_by) REFERENCES users(id)
+)`); } catch (_) {}
 
-// Create/update the requested owner account. The password is stored as a salted scrypt hash,
-// never in plaintext in the repository.
 const email = 'rubel.bhd1@gmail.com';
 const password = process.env.INIT_ADMIN_PASSWORD;
 if (password) {
