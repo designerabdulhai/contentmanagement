@@ -51,18 +51,11 @@ const requireAuth = (req, res, next) => {
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-// Keep scheduled-post state correct even when nobody is viewing the app.
-// Runs every 30 seconds using the server's clock (UTC, matching SQLite datetime('now')).
 syncScheduledPosts();
 setInterval(() => {
-  try {
-    syncScheduledPosts();
-  } catch (error) {
-    console.error('scheduled status sync failed', error);
-  }
+  try { syncScheduledPosts(); } catch (error) { console.error('scheduled status sync failed', error); }
 }, 30_000);
 
-// Also sync immediately before listing posts so the UI never shows stale status.
 const syncBeforeList = (req, res, next) => {
   try { syncScheduledPosts(); } catch (error) { console.error('scheduled status sync failed', error); }
   next();
@@ -84,29 +77,68 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token, user: publicUser });
 });
 
-app.post('/api/auth/logout', requireAuth, (req, res) => {
-  sessions.delete(getToken(req));
-  res.json({ ok: true });
-});
-
+app.post('/api/auth/logout', requireAuth, (req, res) => { sessions.delete(getToken(req)); res.json({ ok: true }); });
 app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: req.user }));
 
 app.get('/api/posts', requireAuth, syncBeforeList, (req, res) => {
-  const rows = db.prepare(`
-    SELECT p.*, u.display_name AS owner FROM posts p LEFT JOIN users u ON p.created_by = u.id
-    ORDER BY p.scheduled_at IS NULL, p.scheduled_at
-  `).all();
+  const rows = db.prepare(`SELECT p.*, u.display_name AS owner FROM posts p LEFT JOIN users u ON p.created_by = u.id ORDER BY p.scheduled_at IS NULL, p.scheduled_at`).all();
   res.json(rows);
 });
 
 app.get('/api/posts/project-suggestions', requireAuth, (req, res) => {
   const q = String(req.query.query || '').trim();
   if (!q) return res.json([]);
-  const rows = db.prepare(`
-    SELECT project_name, scheduled_at, content_type, channel, status FROM posts
-    WHERE project_name IS NOT NULL AND lower(project_name) LIKE ?
-    ORDER BY scheduled_at IS NULL, scheduled_at DESC
-  `).all(`%${q.toLowerCase()}%`);
+  const rows = db.prepare(`SELECT project_name, scheduled_at, content_type, channel, status FROM posts WHERE project_name IS NOT NULL AND lower(project_name) LIKE ? ORDER BY scheduled_at IS NULL, scheduled_at DESC`).all(`%${q.toLowerCase()}%`);
+  const map = {};
+  for (const r of rows) {
+    const name = r.project_name;
+    if (!map[name]) map[name] = { project_name: name, last_scheduled: [], count: 0 };
+    map[name].count += 1;
+    if (r.scheduled_at) map[name].last_scheduled.push(r);
+  }
+  res.json(Object.values(map).map(item => {
+    const latest = item.last_scheduled[0] || null;
+    return { project_name: item.project_name, count: item.count, last_scheduled_at: latest?.scheduled_at || null, last_scheduled_dates: item.last_scheduled.slice(0, 5).map(s => ({ scheduled_at: s.scheduled_at, content_type: s.content_type || '', channel: s.channel || '', status: s.status || '' })) };
+  }));
+});
+
+app.get('/api/contents', requireAuth, (req, res) => {
+  res.json(db.prepare('SELECT c.*, u.display_name AS owner FROM contents c LEFT JOIN users u ON c.created_by = u.id ORDER BY c.created_at DESC, c.id DESC').all());
+});
+
+app.post('/api/contents', requireAuth, (req, res) => {
+  const c = req.body || {};
+  const name = String(c.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const info = db.prepare(`INSERT INTO contents (name, full_video_status, short_ex_status, short_top_status, style_ex_status, style_top_status, poster_status, full_video, short_ex, short_top, style_ex, style_top, poster, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    name, c.full_video_status || null, c.short_ex_status || null, c.short_top_status || null, c.style_ex_status || null, c.style_top_status || null, c.poster_status || null,
+    c.full_video || null, c.short_ex || null, c.short_top || null, c.style_ex || null, c.style_top || null, c.poster || null, req.user.id
+  );
+  res.status(201).json(db.prepare('SELECT * FROM contents WHERE id=?').get(info.lastInsertRowid));
+});
+
+app.put('/api/contents/:id', requireAuth, requireId, (req, res) => {
+  const id = Number(req.params.id), c = req.body || {};
+  if (!db.prepare('SELECT id FROM contents WHERE id=?').get(id)) return res.status(404).json({ error: 'content not found' });
+  const name = String(c.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'name required' });
+  db.prepare(`UPDATE contents SET name=?, full_video_status=?, short_ex_status=?, short_top_status=?, style_ex_status=?, style_top_status=?, poster_status=?, full_video=?, short_ex=?, short_top=?, style_ex=?, style_top=?, poster=?, updated_at=datetime('now') WHERE id=?`).run(
+    name, c.full_video_status || null, c.short_ex_status || null, c.short_top_status || null, c.style_ex_status || null, c.style_top_status || null, c.poster_status || null,
+    c.full_video || null, c.short_ex || null, c.short_top || null, c.style_ex || null, c.style_top || null, c.poster || null, id
+  );
+  res.json(db.prepare('SELECT * FROM contents WHERE id=?').get(id));
+});
+
+app.delete('/api/contents/:id', requireAuth, requireId, (req, res) => {
+  const info = db.prepare('DELETE FROM contents WHERE id=?').run(req.params.id);
+  if (!info.changes) return res.status(404).json({ error: 'content not found' });
+  res.json({ ok: true });
+});
+
+app.get('/api/posts/project-suggestions', requireAuth, (req, res) => {
+  const q = String(req.query.query || '').trim();
+  if (!q) return res.json([]);
+  const rows = db.prepare(`SELECT project_name, scheduled_at, content_type, channel, status FROM posts WHERE project_name IS NOT NULL AND lower(project_name) LIKE ? ORDER BY scheduled_at IS NULL, scheduled_at DESC`).all(`%${q.toLowerCase()}%`);
   const map = {};
   for (const r of rows) {
     const name = r.project_name;
@@ -224,29 +256,14 @@ app.get('/api/users', requireAuth, (req, res) => res.json(db.prepare('SELECT id,
 app.post('/api/invite', requireAuth, (req, res) => {
   const normalizedEmail = String(req.body?.email || '').trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return res.status(400).json({ error: 'valid email required' });
-  const token = crypto.randomBytes(32).toString('hex');
-  const info = db.prepare('INSERT INTO invites(email, role, token) VALUES (?,?,?)').run(normalizedEmail, req.body?.role || 'manager', token);
-  res.status(201).json(db.prepare('SELECT id, email, role, status, created_at FROM invites WHERE id = ?').get(info.lastInsertRowid));
+  const token = crypto.randomBytes(16).toString('hex');
+  const role = String(req.body?.role || 'manager').trim();
+  const info = db.prepare('INSERT INTO invites(email, role, token) VALUES (?,?,?)').run(normalizedEmail, role, token);
+  res.status(201).json(db.prepare('SELECT * FROM invites WHERE id=?').get(info.lastInsertRowid));
 });
-app.get('/api/invites', requireAuth, (req, res) => res.json(db.prepare('SELECT id, email, role, status, created_at FROM invites ORDER BY created_at DESC').all()));
-app.get('/api/summary', requireAuth, syncBeforeList, (req, res) => {
-  const total = db.prepare('SELECT COUNT(*) AS c FROM posts').get().c;
-  const scheduledWeek = db.prepare("SELECT COUNT(*) AS c FROM posts WHERE scheduled_at >= datetime('now') AND scheduled_at < datetime('now','+7 days')").get().c;
-  const uploadedMonth = db.prepare("SELECT COUNT(*) AS c FROM posts WHERE status='Uploaded' AND strftime('%Y-%m', created_at)=strftime('%Y-%m','now')").get().c;
-  const listedCount = db.prepare("SELECT COUNT(*) AS c FROM posts WHERE status='Listed'").get().c;
-  const overdue = db.prepare("SELECT COUNT(*) AS c FROM posts WHERE is_overdue=1").get().c;
-  res.json({ total, scheduledWeek, uploadedMonth, listedCount, overdue });
-});
+app.get('/api/invites', requireAuth, (req, res) => res.json(db.prepare('SELECT id,email,role,status,created_at FROM invites ORDER BY created_at DESC').all()));
 
-const clientDist = path.resolve(__dirname, '../client/dist');
-app.use(express.static(clientDist, { index: 'index.html' }));
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api/')) return next();
-  res.sendFile(path.join(clientDist, 'index.html'), (err) => { if (err) next(err); });
-});
-app.use((err, req, res, next) => {
-  console.error(err);
-  if (res.headersSent) return next(err);
-  res.status(500).json({ error: 'internal server error' });
-});
+app.use(express.static(path.join(__dirname, '../client/dist')));
+app.use((req, res) => res.sendFile(path.join(__dirname, '../client/dist/index.html')));
+app.use((error, req, res, next) => { console.error(error); res.status(500).json({ error: 'internal server error' }); });
 app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
