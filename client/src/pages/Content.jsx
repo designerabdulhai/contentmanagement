@@ -43,7 +43,6 @@ function StatusCell({item, field, status, onStatus}){
 async function copyPath(path){
   const value = String(path || '').trim()
   if (!value) return
-
   try{
     await navigator.clipboard.writeText(value)
   }catch{
@@ -63,7 +62,7 @@ export default function Content(){
   const [loading,setLoading] = useState(true)
   const [error,setError] = useState('')
   const [search,setSearch] = useState('')
-  const [tab,setTab] = useState('ready')
+  const [tab,setTab] = useState('all')
   const [showModal,setShowModal] = useState(false)
   const [editing,setEditing] = useState(null)
   const [saving,setSaving] = useState(false)
@@ -75,7 +74,11 @@ export default function Content(){
 
   const visible = useMemo(()=>{
     const q = search.trim().toLowerCase()
-    return items.filter(item=>stageOf(item)===tab && (!q || [item.name,item.document_link,item.file_path].some(v=>String(v||'').toLowerCase().includes(q))))
+    return items.filter(item=>{
+      const matchesTab = tab === 'all' || stageOf(item) === tab
+      const matchesSearch = !q || [item.name,item.document_link,item.file_path].some(v=>String(v||'').toLowerCase().includes(q))
+      return matchesTab && matchesSearch
+    })
   },[items,tab,search])
 
   const save = async (payload) => {
@@ -113,13 +116,18 @@ export default function Content(){
     <div className="content-toolbar">
       <input className="search content-search" placeholder="Search content" value={search} onChange={e=>setSearch(e.target.value)} />
       <div className="content-tabs" role="tablist">
-        {[['ready','Video Ready'],['running','Running'],['uploaded','Uploaded']].map(([key,label])=><button key={key} className={tab===key?'active':''} type="button" onClick={()=>setTab(key)}>{label}<span>{counts[key]}</span></button>)}
+        {[
+          ['all','All',items.length],
+          ['ready','Video Ready',counts.ready],
+          ['running','Running',counts.running],
+          ['uploaded','Uploaded',counts.uploaded]
+        ].map(([key,label,count])=><button key={key} className={tab===key?'active':''} type="button" onClick={()=>setTab(key)}>{label}<span>{count}</span></button>)}
       </div>
     </div>
 
     {error && <div className="content-error">{error}</div>}
     <div className="table-wrap card content-table-wrap">
-      {loading ? <div className="content-empty">Loading content…</div> : visible.length===0 ? <div className="content-empty">No content found in this tab.</div> :
+      {loading ? <div className="content-empty">Loading content…</div> : visible.length===0 ? <div className="content-empty">No content found.</div> :
       <table className="content-table"><thead><tr>
         <th>Name</th><th>Full Video</th><th>Short Ex</th><th>Short Top</th><th>Style Ex</th><th>Style Top</th><th>Poster</th><th>Actions</th>
       </tr></thead><tbody>{visible.map(item=><tr key={item.id}>
@@ -132,7 +140,7 @@ export default function Content(){
         <td><StatusCell item={item} field="poster" status={item.poster_status} onStatus={updateStatus} /></td>
         <td className="actions content-actions">
           <button type="button" title={item.document_link ? 'Open Document' : 'Document link not set'} disabled={!item.document_link} onClick={()=>item.document_link && window.open(item.document_link,'_blank','noopener,noreferrer')}>↗</button>
-          <button type="button" title={item.file_path ? 'Copy Path Link' : 'File path not set'} disabled={!item.file_path} onClick={()=>copyPath(item.file_path)}>⧉</button>
+          <button type="button" title={item.file_path ? 'Copy Path' : 'File path not set'} disabled={!item.file_path} onClick={()=>copyPath(item.file_path)}>⧉</button>
           <button type="button" title="Edit" onClick={()=>{setEditing(item);setShowModal(true)}}>✏️</button>
         </td>
       </tr>)}</tbody></table>}
