@@ -18,7 +18,7 @@ function emptyContent(){
 
 function stageOf(item){
   if (VIDEO_FIELDS.every(([key]) => item?.[`${key}_status`] === 'Upload')) return 'uploaded'
-  if (item?.full_video_status === 'Record' || item?.full_video_status === 'Running' || item?.full_video_status === 'Editing Done') return 'running'
+  if (VIDEO_FIELDS.some(([key]) => ['Record','Running','Editing Done'].includes(item?.[`${key}_status`]))) return 'running'
   return 'ready'
 }
 
