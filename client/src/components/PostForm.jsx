@@ -228,7 +228,7 @@ export default function PostForm({onSaved,onCancel}){
     setPanelOpen(true);
   }
 
-  const contentTypes = Array.isArray(settings.content_types) ? settings.content_types : [];
+  const contentTypes = Array.from(new Set([...(Array.isArray(settings.content_types) ? settings.content_types : []), 'Client', 'Book']));
   const channels = Array.isArray(settings.channels) ? settings.channels : [];
   const platforms = Array.isArray(settings.platforms) ? settings.platforms : [];
 
