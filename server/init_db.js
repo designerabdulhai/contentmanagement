@@ -17,11 +17,25 @@ CREATE TABLE IF NOT EXISTS invites (id INTEGER PRIMARY KEY AUTOINCREMENT, email 
 CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, action TEXT, payload TEXT, actor TEXT, created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE IF NOT EXISTS templates (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, content_type TEXT, channel TEXT, platform TEXT, project_id INTEGER, created_by INTEGER, created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE IF NOT EXISTS post_notes (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, user_id INTEGER, message TEXT, created_at TEXT DEFAULT (datetime('now')));
-INSERT OR IGNORE INTO settings(key, value) VALUES ('content_types', 'Reel,Post,Blog,Video,Carousel,Story');
+INSERT OR IGNORE INTO settings(key, value) VALUES ('content_types', 'Reel,Post,Blog,Video,Carousel,Story,Client,Book');
 INSERT OR IGNORE INTO settings(key, value) VALUES ('channels', 'Instagram,YouTube,Website,Newsletter');
 INSERT OR IGNORE INTO settings(key, value) VALUES ('platforms', 'Meta,Google,TikTok,Direct');
 INSERT OR IGNORE INTO settings(key, value) VALUES ('statuses', 'Listed,Scheduled,Uploaded');
 `);
+
+// Keep existing installations in sync with the new Content Types without
+// overwriting any custom values already saved by the user.
+try {
+  const row = db.prepare("SELECT value FROM settings WHERE key='content_types'").get();
+  if (row) {
+    const items = row.value.split(',').map(v => v.trim()).filter(Boolean);
+    for (const item of ['Client', 'Book']) {
+      if (!items.includes(item)) items.push(item);
+    }
+    db.prepare("UPDATE settings SET value=? WHERE key='content_types'").run(items.join(','));
+  }
+} catch (_) {}
+
 try { db.exec('ALTER TABLE users ADD COLUMN password_hash TEXT'); } catch (_) {}
 try { db.exec('ALTER TABLE users ADD COLUMN password_salt TEXT'); } catch (_) {}
 try { db.exec('ALTER TABLE contents ADD COLUMN poster_status TEXT'); } catch (_) {}
