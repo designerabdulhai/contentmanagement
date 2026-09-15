@@ -3,6 +3,7 @@ import api from '../api'
 
 const DEFAULT_PROFILE = { name: 'Owner Name', email: '', photo: '' };
 const SETTINGS_CACHE_KEY = 'contentmanagement.settings.cache.v1';
+const REQUIRED_CONTENT_TYPES = ['Client', 'Book'];
 
 function readProfile(settings) {
   return {
@@ -31,6 +32,21 @@ function cacheSettings(settings) {
   }
 }
 
+function ensureContentTypes(data) {
+  const current = Array.isArray(data.content_types) ? data.content_types : [];
+  const contentTypes = [...current];
+  let changed = false;
+
+  for (const type of REQUIRED_CONTENT_TYPES) {
+    if (!contentTypes.includes(type)) {
+      contentTypes.push(type);
+      changed = true;
+    }
+  }
+
+  return { data: { ...data, content_types: contentTypes }, changed };
+}
+
 function imageToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -55,8 +71,6 @@ function imageToBase64(file) {
 }
 
 export default function Settings(){
-  // Show the last known settings immediately, then refresh from D1 in the background.
-  // This removes both the old/default flash and the long blocking loading screen.
   const initialCachedSettings = readCachedSettings();
   const [settings, setSettings] = useState(initialCachedSettings);
   const [profile, setProfile] = useState(initialCachedSettings ? readProfile(initialCachedSettings) : null);
@@ -73,7 +87,20 @@ export default function Settings(){
     setSettingsError('');
     try {
       const r = await api.get('/settings');
-      const data = r?.data || {};
+      const rawData = r?.data || {};
+      const { data, changed } = ensureContentTypes(rawData);
+
+      // Existing deployments may already have an older saved Content Types value.
+      // Persist Client and Book immediately so the setting is updated in D1 and
+      // remains available after refresh/redeploy.
+      if (changed) {
+        try {
+          await api.put('/settings/content_types', data.content_types);
+        } catch (error) {
+          // Keep the UI correct even if persistence temporarily fails.
+        }
+      }
+
       cacheSettings(data);
       setSettings(data);
       setProfile(readProfile(data));
