@@ -55,8 +55,6 @@ function imageToBase64(file) {
 }
 
 export default function Settings(){
-  // Show the last known settings immediately, then refresh from D1 in the background.
-  // This removes both the old/default flash and the long blocking loading screen.
   const initialCachedSettings = readCachedSettings();
   const [settings, setSettings] = useState(initialCachedSettings);
   const [profile, setProfile] = useState(initialCachedSettings ? readProfile(initialCachedSettings) : null);
