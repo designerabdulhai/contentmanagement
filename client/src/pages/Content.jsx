@@ -17,12 +17,13 @@ function emptyContent(){
 }
 
 function videoStatuses(item){return VIDEO_FIELDS.map(([key])=>String(item?.[`${key}_status`]||''))}
-function isListedVideo(item){const statuses=videoStatuses(item);return statuses.length>0&&statuses.every(status=>status==='Upload')}
+// A Listed Video is a post where none of the five video statuses has been changed yet.
+function isListedVideo(item){const statuses=videoStatuses(item);return statuses.length>0&&statuses.every(status=>status==='')}
 function isRecorderVideo(item){const statuses=videoStatuses(item);return statuses.length>0&&statuses.every(status=>status==='Record')}
-function isRunningVideo(item){const statuses=videoStatuses(item);return !isListedVideo(item)&&!isRecorderVideo(item)&&statuses.some(status=>['Record','Running','Editing Done','Upload'].includes(status))}
+function isRunningVideo(item){const statuses=videoStatuses(item);return !isListedVideo(item)&&!isRecorderVideo(item)&&statuses.some(status=>status!=='')}
 
 function stageOf(item){
-  if (isListedVideo(item)) return 'uploaded'
+  if (isListedVideo(item)) return 'ready'
   if (isRunningVideo(item)||isRecorderVideo(item)) return 'running'
   return 'ready'
 }
