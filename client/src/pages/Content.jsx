@@ -70,14 +70,18 @@ export default function Content(){
   return <div className="page content-page">
     <div className="content-header"><div><h2>Content</h2><p>Manage video production from ready to uploaded.</p></div><button className="btn-primary" type="button" onClick={()=>{setEditing(null);setShowModal(true)}}>+ Add New Content</button></div>
     <div className="content-summary-grid">
-      {CHANNELS.filter(ch=>ch!=='DHD').map(ch=><div className={`content-summary-channel content-summary-${ch.toLowerCase()}`} key={ch}>
-        <div className="content-summary-title">{ch}</div>
-        <div className="content-summary-metrics">
-          <div className="content-summary-metric"><span className="content-summary-dot listed"></span><div><span>Total Listed Video</span><strong>{videoSummary[ch]?.listed||0}</strong></div></div>
-          <div className="content-summary-metric"><span className="content-summary-dot recorder"></span><div><span>Total Recorder Video</span><strong>{videoSummary[ch]?.recorder||0}</strong></div></div>
-          <div className="content-summary-metric"><span className="content-summary-dot running"></span><div><span>Total Running Video</span><strong>{videoSummary[ch]?.running||0}</strong></div></div>
+      {CHANNELS.filter(ch=>ch!=='DHD').map(ch=>{
+        const recorderCount=videoSummary[ch]?.recorder||0
+        const recordMessage=recorderCount<5?`Total Recorder Video = ${recorderCount} → Need Video Record for ${ch}`:''
+        return <div className={`content-summary-channel content-summary-${ch.toLowerCase()}`} key={ch}>
+          <div className="content-summary-title">{ch}<span className="content-summary-record-message">{recordMessage}</span></div>
+          <div className="content-summary-metrics">
+            <div className="content-summary-metric"><span className="content-summary-dot listed"></span><div><span>Total Listed Video</span><strong>{videoSummary[ch]?.listed||0}</strong></div></div>
+            <div className="content-summary-metric"><span className="content-summary-dot recorder"></span><div><span>Total Recorder Video</span><strong>{recorderCount}</strong></div></div>
+            <div className="content-summary-metric"><span className="content-summary-dot running"></span><div><span>Total Running Video</span><strong>{videoSummary[ch]?.running||0}</strong></div></div>
+          </div>
         </div>
-      </div>)}
+      })}
     </div>
     <div className="content-toolbar">
       <input className="search content-search" placeholder="Search content" value={search} onChange={e=>setSearch(e.target.value)} />
