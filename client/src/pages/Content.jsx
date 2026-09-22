@@ -72,9 +72,9 @@ export default function Content(){
     <div className="content-summary-grid">
       {CHANNELS.filter(ch=>ch!=='DHD').map(ch=>{
         const recorderCount=videoSummary[ch]?.recorder||0
-        const recordMessage=recorderCount<5?`Total Recorder Video = ${recorderCount} → Need Video Record for ${ch}`:''
+        const recordMessage=recorderCount<=2?'Need Video Record':''
         return <div className={`content-summary-channel content-summary-${ch.toLowerCase()}`} key={ch}>
-          <div className="content-summary-title">{ch}<span className="content-summary-record-message">{recordMessage}</span></div>
+          <div className="content-summary-title"><span>{ch}</span>{recordMessage&&<span className="content-summary-record-message">{recordMessage}</span>}</div>
           <div className="content-summary-metrics">
             <div className="content-summary-metric"><span className="content-summary-dot listed"></span><div><span>Total Listed Video</span><strong>{videoSummary[ch]?.listed||0}</strong></div></div>
             <div className="content-summary-metric"><span className="content-summary-dot recorder"></span><div><span>Total Recorder Video</span><strong>{recorderCount}</strong></div></div>
