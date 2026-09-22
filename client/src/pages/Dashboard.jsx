@@ -40,6 +40,14 @@ function weeklyTypeCounts(posts){
   return result;
 }
 
+function isCurrentMonth(value){
+  if(!value) return false;
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
+
 function formatDateTime(value){
   if(!value) return '';
   const d = new Date(value);
@@ -92,7 +100,11 @@ export default function Dashboard(){
  useEffect(()=>{loadDashboard()},[])
  useEffect(()=>{ const onKey=e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();setSearchOpen(true);setTimeout(()=>document.querySelector('#dashboard-universal-search')?.focus(),0)} if(e.key==='Escape')setSearchOpen(false)}; window.addEventListener('keydown',onKey); return()=>window.removeEventListener('keydown',onKey)},[])
  const channelCounts=useMemo(()=>buildCounts(posts,'channel'),[posts]); const typeCounts=useMemo(()=>buildCounts(posts,'content_type'),[posts]); const monthlyCounts=useMemo(()=>monthCounts(posts),[posts]); const weeklyTypes=useMemo(()=>weeklyTypeCounts(posts),[posts]);
- const stats=[{key:'total',label:'Total posts',value:Number(summary.total)||0,icon:'📁',trend:''},{key:'scheduledWeek',label:'Scheduled this week',value:Number(summary.scheduledWeek)||0,icon:'🗓️',trend:''},{key:'uploaded',label:'Uploaded',value:Number(summary.uploaded)||0,icon:'⬆️',trend:''},{key:'listedCount',label:'Listed',value:Number(summary.listedCount)||0,icon:'📝',trend:''}];
+ const monthPosts=useMemo(()=>posts.filter(p=>isCurrentMonth(p.created_at)),[posts]);
+ const scheduledThisMonth=useMemo(()=>posts.filter(p=>isCurrentMonth(p.scheduled_at)),[posts]);
+ const uploadedThisMonth=useMemo(()=>monthPosts.filter(p=>String(p.status||'').toLowerCase()==='uploaded'),[monthPosts]);
+ const listedThisMonth=useMemo(()=>monthPosts.filter(p=>String(p.status||'').toLowerCase()==='listed'),[monthPosts]);
+ const stats=[{key:'total',label:'Total posts this month',value:monthPosts.length,icon:'📁',trend:''},{key:'scheduledMonth',label:'Scheduled this month',value:scheduledThisMonth.length,icon:'🗓️',trend:''},{key:'uploadedMonth',label:'Uploaded this month',value:uploadedThisMonth.length,icon:'⬆️',trend:''},{key:'listedMonth',label:'Listed this month',value:listedThisMonth.length,icon:'📝',trend:''}];
  const searchQuery=search.trim().toLowerCase(); const results=useMemo(()=>{ if(!searchQuery) return []; return posts.filter(p=>[p.project_name,p.content_type,p.channel,p.platform,p.status,p.owner,p.notes,p.uploaded_link,p.scheduled_at,...getSearchDateValues(p)].some(v=>String(v||'').toLowerCase().includes(searchQuery))).slice(0,8)},[posts,searchQuery]);
  const openResult=(p)=>{setSearchOpen(false);setSearch(''); window.dispatchEvent(new CustomEvent('navigateToList')); setTimeout(()=>window.dispatchEvent(new CustomEvent('openSearchResult',{detail:p})),50)};
  return <div className="page dashboard">
