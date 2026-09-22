@@ -16,9 +16,14 @@ function emptyContent(){
   return {name:'',channel:'',emergency:0,full_video_status:'',short_ex_status:'',short_top_status:'',style_ex_status:'',style_top_status:'',poster_status:'',document_link:'',file_path:''}
 }
 
+function videoStatuses(item){return VIDEO_FIELDS.map(([key])=>String(item?.[`${key}_status`]||''))}
+function isListedVideo(item){const statuses=videoStatuses(item);return statuses.length>0&&statuses.every(status=>status==='Upload')}
+function isRecorderVideo(item){const statuses=videoStatuses(item);return statuses.length>0&&statuses.every(status=>status==='Record')}
+function isRunningVideo(item){const statuses=videoStatuses(item);return !isListedVideo(item)&&!isRecorderVideo(item)&&statuses.some(status=>['Record','Running','Editing Done','Upload'].includes(status))}
+
 function stageOf(item){
-  if (VIDEO_FIELDS.every(([key]) => item?.[`${key}_status`] === 'Upload')) return 'uploaded'
-  if (VIDEO_FIELDS.some(([key]) => ['Record','Running','Editing Done'].includes(item?.[`${key}_status`]))) return 'running'
+  if (isListedVideo(item)) return 'uploaded'
+  if (isRunningVideo(item)||isRecorderVideo(item)) return 'running'
   return 'ready'
 }
 
@@ -50,6 +55,11 @@ export default function Content(){
   useEffect(()=>{load()},[])
   const counts=useMemo(()=>items.reduce((acc,item)=>{acc[stageOf(item)]+=1;return acc},{ready:0,running:0,uploaded:0}),[items])
   const channelCounts=useMemo(()=>items.reduce((acc,item)=>{const ch=String(item.channel||'').toUpperCase();if(CHANNELS.includes(ch))acc[ch]+=1;return acc},{HHD:0,BHD:0,DHD:0}),[items])
+  const videoSummary=useMemo(()=>CHANNELS.reduce((acc,ch)=>{
+    const channelItems=items.filter(item=>String(item.channel||'').toUpperCase()===ch)
+    acc[ch]={listed:channelItems.filter(isListedVideo).length,recorder:channelItems.filter(isRecorderVideo).length,running:channelItems.filter(isRunningVideo).length}
+    return acc
+  },{}),[items])
   const visible=useMemo(()=>{const q=search.trim().toLowerCase();return items.filter(item=>{const matchesTab=tab==='all'||stageOf(item)===tab;const matchesChannel=channelFilter==='all'||String(item.channel||'').toUpperCase()===channelFilter;const matchesSearch=!q||[item.name,item.channel,item.document_link,item.file_path].some(v=>String(v||'').toLowerCase().includes(q));return matchesTab&&matchesChannel&&matchesSearch})},[items,tab,channelFilter,search])
   const save=async payload=>{setSaving(true);setError('');try{const r=editing?await api.put(`/contents/${editing.id}`,payload):await api.post('/contents',payload);setItems(current=>editing?current.map(item=>item.id===editing.id?r.data:item):[r.data,...current]);setShowModal(false);setEditing(null)}catch(e){setError(e.message||'Unable to save content')}finally{setSaving(false)}}
   const updateStatus=async(item,field,value)=>{setError('');const next={...item,[field]:value};setItems(current=>current.map(row=>row.id===item.id?next:row));try{const r=await api.put(`/contents/${item.id}`,next);setItems(current=>current.map(row=>row.id===item.id?r.data:row))}catch(e){setItems(current=>current.map(row=>row.id===item.id?item:row));setError(e.message||'Unable to update status')}}
@@ -58,6 +68,16 @@ export default function Content(){
 
   return <div className="page content-page">
     <div className="content-header"><div><h2>Content</h2><p>Manage video production from ready to uploaded.</p></div><button className="btn-primary" type="button" onClick={()=>{setEditing(null);setShowModal(true)}}>+ Add New Content</button></div>
+    <div className="content-summary-grid">
+      {CHANNELS.filter(ch=>ch!=='DHD').map(ch=><div className={`content-summary-channel content-summary-${ch.toLowerCase()}`} key={ch}>
+        <div className="content-summary-title">{ch}</div>
+        <div className="content-summary-metrics">
+          <div className="content-summary-metric"><span className="content-summary-dot listed"></span><div><span>Total Listed Video</span><strong>{videoSummary[ch]?.listed||0}</strong></div></div>
+          <div className="content-summary-metric"><span className="content-summary-dot recorder"></span><div><span>Total Recorder Video</span><strong>{videoSummary[ch]?.recorder||0}</strong></div></div>
+          <div className="content-summary-metric"><span className="content-summary-dot running"></span><div><span>Total Running Video</span><strong>{videoSummary[ch]?.running||0}</strong></div></div>
+        </div>
+      </div>)}
+    </div>
     <div className="content-toolbar">
       <input className="search content-search" placeholder="Search content" value={search} onChange={e=>setSearch(e.target.value)} />
       <div className="content-filter-groups">
