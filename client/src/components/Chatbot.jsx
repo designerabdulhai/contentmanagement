@@ -19,7 +19,9 @@ function normalizeText(value){
     .trim()
 }
 
-function channelOf(item){ return String(item?.channel || '').trim().toUpperCase() }
+function channelOf(item){
+  return String(item?.channel || '').trim().toUpperCase()
+}
 
 function stageOf(item){
   const statuses = VIDEO_FIELDS.map(key => String(item?.[key] || '').trim().toLowerCase())
@@ -33,12 +35,19 @@ function isCountQuestion(text){
 }
 
 function wantsList(text){
-  return /show|list|which|what|give|দেখাও|লিস্ট|তালিকা|কি\s*কি|কী\s*কী|কোন\s*কোন/.test(text)
+  return /show|list|which|what|give|name|names|দেখাও|লিস্ট|তালিকা|কি\s*কি|কী\s*কী|কোন\s*কোন|নাম/.test(text)
+}
+
+function isNameFollowup(text){
+  const value = normalizeText(text)
+    .replace(/^(please|pls|দয়া করে|দয়া করে)\s+/, '')
+    .trim()
+  return /^(?:name|names|name please|show name|show names|নাম|নামগুলো|নাম গুলো|নাম বল|নামগুলো বল|নাম কি|নাম কী)$/.test(value)
 }
 
 function isVagueListQuestion(text){
   const value = normalizeText(text)
-    .replace(/^(please|pls|দয়া করে|দয়া করে)\s+/,'')
+    .replace(/^(please|pls|দয়া করে|দয়া করে)\s+/, '')
     .trim()
   return /^(?:কি\s*কি|কী\s*কী|কোন\s*কোন|কি কি ভিডিও|কী কী ভিডিও|কোন কোন ভিডিও|what|which|what videos|which videos|show me|show list|list them|give me the list)$/.test(value)
 }
@@ -58,6 +67,10 @@ function unwrapArray(response){
   return []
 }
 
+function formatContentNames(items){
+  return items.map((item,index) => `${index + 1}. ${item?.name || item?.project_name || item?.project || 'Untitled'}`).join('\n')
+}
+
 function localVideoAnswer(question, contents){
   const lower = normalizeText(question)
   if (!/video|content|ভিডিও|কনটেন্ট/.test(lower)) return null
@@ -70,21 +83,25 @@ function localVideoAnswer(question, contents){
 
   const rows = contents.filter(item => !channel || channelOf(item) === channel)
   const matching = stage ? rows.filter(item => stageOf(item) === stage) : rows
+  const count = isCountQuestion(lower)
+  const list = wantsList(lower)
 
-  if (stage && isCountQuestion(lower)) {
-    return `${channel ? channel + ' ' : ''}${stage} Video: ${matching.length}`
-  }
-
-  if (stage && wantsList(lower)) {
+  if (stage && (count || list)) {
     const title = `${channel ? channel + ' ' : ''}${stage} Video`
     if (!matching.length) return `${title}: 0\n\nNo matching videos found.`
-    return `${title}: ${matching.length}\n\n${matching.map((item,index) => `${index + 1}. ${item.name}`).join('\n')}`
+
+    const parts = []
+    if (count) parts.push(`${title}: ${matching.length}`)
+    if (list) parts.push(formatContentNames(matching))
+    return parts.join('\n\n')
   }
 
-  if (channel && isCountQuestion(lower)) return `${channel} Total Content: ${rows.length}`
-  if (channel && wantsList(lower)) {
+  if (channel && (count || list)) {
     if (!rows.length) return `${channel}: 0\n\nNo content found.`
-    return `${channel} Content: ${rows.length}\n\n${rows.map((item,index) => `${index + 1}. ${item.name} — ${stageOf(item)}`).join('\n')}`
+    const parts = []
+    if (count) parts.push(`${channel} Total Content: ${rows.length}`)
+    if (list) parts.push(rows.map((item,index) => `${index + 1}. ${item?.name || 'Untitled'} — ${stageOf(item)}`).join('\n'))
+    return parts.join('\n\n')
   }
 
   return null
@@ -97,7 +114,7 @@ function localEditingAnswer(question, contents){
 
   const channel = getChannel(lower)
   const rows = contents.filter(item => !channel || channelOf(item) === channel)
-  const editingCount = rows.reduce((total, item) => total + VIDEO_FIELDS.filter(key => String(item?.[key] || '').trim().toLowerCase() === 'editing done').length, 0)
+  const editingCount = rows.reduce((total,item) => total + VIDEO_FIELDS.filter(key => String(item?.[key] || '').trim().toLowerCase() === 'editing done').length, 0)
   return `${channel ? channel + ' ' : ''}Total Editing Done Video: ${editingCount}`
 }
 
@@ -105,18 +122,23 @@ function localEditingList(question, contents){
   const lower = normalizeText(question)
   if (!/edit|editing|এডিট|এডিটিং/.test(lower)) return null
   if (!wantsList(lower)) return null
+
   const channel = getChannel(lower)
   const rows = contents.filter(item => !channel || channelOf(item) === channel)
   const matching = rows.filter(item => VIDEO_FIELDS.some(key => String(item?.[key] || '').trim().toLowerCase() === 'editing done'))
   const title = `${channel ? channel + ' ' : ''}Editing Done Videos`
   if (!matching.length) return `${title}: 0\n\nNo editing-done videos found.`
-  return `${title}: ${matching.length}\n\n${matching.map((item,index) => `${index + 1}. ${item.name}`).join('\n')}`
+  return `${title}: ${matching.length}\n\n${formatContentNames(matching)}`
 }
 
 function inferFollowup(question, previousQuestion){
   const current = normalizeText(question)
   const previous = normalizeText(previousQuestion)
-  if (!previous || !isVagueListQuestion(current)) return null
+  if (!previous) return null
+
+  const vague = isVagueListQuestion(current)
+  const nameFollowup = isNameFollowup(current)
+  if (!vague && !nameFollowup) return null
 
   if (/edit|editing|এডিট|এডিটিং/.test(previous)) return 'editing'
   if (/\brecorded\b|\brecord\b|\brecorder\b|রেকর্ডেড|রেকর্ড|রেকর্ডার/.test(previous)) return 'recorded'
@@ -155,7 +177,7 @@ function todayDhakaKey(offsetDays=0){
   const year = Number(parts.find(p=>p.type==='year')?.value)
   const month = Number(parts.find(p=>p.type==='month')?.value)
   const day = Number(parts.find(p=>p.type==='day')?.value)
-  const d = new Date(Date.UTC(year, month - 1, day + offsetDays))
+  const d = new Date(Date.UTC(year,month - 1,day + offsetDays))
   return d.toISOString().slice(0,10)
 }
 
@@ -169,12 +191,13 @@ function localScheduleAnswer(question, posts){
     const status = String(p?.status || '').trim().toLowerCase()
     return (status === 'scheduled' || status.includes('schedul')) && p?.scheduled_at && (!channel || channelOf(p) === channel)
   })
+
   const today = /\btoday\b|আজ|আজকে|আজকের/.test(lower)
   const tomorrow = /\btomorrow\b|আগামীকাল/.test(lower)
   const asksCount = isCountQuestion(lower)
   const asksWhen = /when|date|time|কবে|কখন|তারিখ|সময়|সময়/.test(lower)
 
-  const formatPosts = (items, includeDate=true) => items.map((p,index) => {
+  const formatPosts = (items,includeDate=true) => items.map((p,index) => {
     const project = p.project_name || p.name || p.project || 'Untitled'
     const ch = p.channel ? ` [${p.channel}]` : ''
     const date = includeDate ? `${dhakaDateKey(p.scheduled_at)} ` : ''
@@ -219,8 +242,9 @@ export default function Chatbot(){
     if(!question || loading) return
 
     const previousUserQuestion = [...messages].reverse().find(item => item.role === 'user')?.text || ''
-    const followupType = inferFollowup(question, previousUserQuestion)
+    const followupType = inferFollowup(question,previousUserQuestion)
     const vagueList = isVagueListQuestion(question)
+    const nameFollowup = isNameFollowup(question)
 
     setMessage('')
     setMessages(current=>[...current,{role:'user',text:question}])
@@ -228,7 +252,7 @@ export default function Chatbot(){
 
     try{
       const lower = normalizeText(question)
-      const wantsVideoData = /video|content|listed|record|recorder|running|edit|editing|ভিডিও|কনটেন্ট|লিস্টেড|রেকর্ড|রানিং|এডিট|এডিটিং/.test(lower) || Boolean(followupType) || vagueList
+      const wantsVideoData = /video|content|listed|record|recorder|running|edit|editing|ভিডিও|কনটেন্ট|লিস্টেড|রেকর্ড|রানিং|এডিট|এডিটিং/.test(lower) || Boolean(followupType) || vagueList || nameFollowup
       const wantsScheduleData = /schedule|scheduled|calendar|post|today|tomorrow|শিডিউল|ক্যালেন্ডার|পোস্ট|আজ|আজকে|আজকের|আগামীকাল/.test(lower) || followupType === 'scheduled'
 
       if(wantsVideoData || wantsScheduleData){
@@ -243,15 +267,15 @@ export default function Chatbot(){
           let localAnswer = null
 
           if(followupType === 'editing'){
-            localAnswer = localEditingList(previousUserQuestion,contents)
+            localAnswer = localEditingList(previousUserQuestion,contents) || localEditingAnswer(previousUserQuestion,contents)
           } else if(followupType === 'recorded'){
-            localAnswer = localVideoAnswer(`${previousUserQuestion} show list`,contents)
+            localAnswer = localVideoAnswer(`${previousUserQuestion} show names`,contents)
           } else if(followupType === 'running'){
-            localAnswer = localVideoAnswer(`${previousUserQuestion} show list`,contents)
+            localAnswer = localVideoAnswer(`${previousUserQuestion} show names`,contents)
           } else if(followupType === 'listed'){
-            localAnswer = localVideoAnswer(`${previousUserQuestion} show list`,contents)
-          } else if(!followupType && !vagueList){
-            localAnswer = localEditingAnswer(question,contents) || localVideoAnswer(question,contents)
+            localAnswer = localVideoAnswer(`${previousUserQuestion} show names`,contents)
+          } else if(!followupType && !vagueList && !nameFollowup){
+            localAnswer = localEditingAnswer(question,contents) || localEditingList(question,contents) || localVideoAnswer(question,contents)
           }
 
           if(localAnswer){
