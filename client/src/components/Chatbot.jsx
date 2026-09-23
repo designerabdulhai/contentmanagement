@@ -16,14 +16,22 @@ const channelOf = (row) => textOf(row?.channel).toUpperCase()
 const nameOf = (row) => textOf(row?.name || row?.project_name || row?.project || row?.title || 'Untitled')
 const statusOf = (row) => textOf(row?.status).toLowerCase()
 const statusesOf = (row) => VIDEO_FIELDS.map((k) => textOf(row?.[k]).toLowerCase())
-const isListed = (row) => statusesOf(row).every((v) => v === '' || v === 'not set')
+
+const isListed = (row) => statusesOf(row).every((v) => !v || v === 'not set')
 const isRecorder = (row) => statusesOf(row).every((v) => v === 'record')
-const isEditingDone = (row) => statusesOf(row).some((v) => ['editing done', 'edited', 'edit done'].includes(v) || v.includes('editing done'))
+const isEditingDone = (row) => statusesOf(row).some((v) => v === 'editing done' || v === 'edited' || v === 'edit done' || v.includes('editing done'))
 const isRunning = (row) => !isListed(row) && !isRecorder(row) && statusesOf(row).some(Boolean)
 
-const isCountQuestion = (q) => /how many|how much|count|total|number|কত|কয়|কয়|কয়টি|কয়টি|কয়টা|কয়টা|সংখ্যা|মোট/.test(normalize(q))
-const isListQuestion = (q) => /show|list|which|what|give|name|names|বল|নাম|দেখাও|লিস্ট|তালিকা|কি কি|কী কী|কোন কোন|কোনগুলো|কোন গুলো|কারা|কোনটা|কোনটি/.test(normalize(q))
+const has = (q, re) => re.test(normalize(q))
+const isCountQuestion = (q) => has(q, /how many|how much|count|total|number|কত|কয়|কয়|কয়টি|কয়টি|কয়টা|কয়টা|সংখ্যা|মোট/)
+const isListQuestion = (q) => has(q, /show|list|which|what|give|name|names|বল|নাম|দেখাও|লিস্ট|তালিকা|কি কি|কী কী|কোন কোন|কোনগুলো|কোন গুলো|কারা|কোনটা|কোনটি/)
 const isFollowup = (q) => /^(নাম|নামগুলো|নাম বল|নাম বলো|নাম দাও|কি কি|কী কী|কী কি|কোনগুলো|কোন গুলো|কোন কোন|কোনটা|কোনটি|which|which ones|list|list them|show|show me|give me the list|details|বিস্তারিত|আর কি|আর কী|আরও|আরও বল|এগুলো|ওগুলো|এগুলোর নাম|ওগুলোর নাম|তার নাম|তাদের নাম)(\s*(বল|দাও|দেখাও))?$/i.test(normalize(q))
+
+const questionHasVideo = (q) => has(q, /video|videos|content|ভিডিও|কনটেন্ট/)
+const questionHasUpload = (q) => has(q, /upload|uploaded|আপলোড/)
+const questionHasPost = (q) => has(q, /post|posted|পোস্ট/)
+const questionHasSchedule = (q) => has(q, /schedule|scheduled|calendar|শিডিউল|ক্যালেন্ডার|কবে|কখন|তারিখ|সময়|সময়/)
+const questionHasTime = (q) => has(q, /কবে|কখন|তারিখ|সময়|সময়|when|date|time/)
 
 const extractChannel = (q) => {
   const m = normalize(q).match(/(?:^|\s)(hhd|bhd|dhd)(?:$|\s)/i)
@@ -112,11 +120,6 @@ function dateFilterFromQuestion(question) {
   return null
 }
 
-const questionHasVideo = (q) => /video|videos|content|ভিডিও|কনটেন্ট/.test(normalize(q))
-const questionHasUpload = (q) => /upload|uploaded|আপলোড/.test(normalize(q))
-const questionHasPost = (q) => /post|posted|পোস্ট/.test(normalize(q))
-const questionHasSchedule = (q) => /schedule|scheduled|calendar|শিডিউল|ক্যালেন্ডার|কবে|কখন|তারিখ|সময়|সময়/.test(normalize(q))
-
 function answerVideos(question, history, contents) {
   const original = textOf(question)
   const effective = effectiveQuestion(original, history)
@@ -136,8 +139,8 @@ function answerVideos(question, history, contents) {
 
   const label = channel ? `${channel} ` : ''
   const stageLabel = stage === 'editing' ? 'Editing Done' : stage === 'recorder' ? 'Recorder' : stage === 'running' ? 'Running' : stage === 'listed' ? 'Listed' : 'Total'
-  if (isCountQuestion(q) && !isListQuestion(q)) return `${label}${stageLabel} Videos: ${rows.length}`
-  if (isListQuestion(q) || follow) return `${label}${stageLabel === 'Total' ? 'Content' : stageLabel} Videos: ${rows.length}\n\n${rows.length ? rows.map((r, i) => `${i + 1}. ${nameOf(r)}`).join('\n') : 'No matching videos found.'}`
+  if (isCountQuestion(original) && !isListQuestion(original)) return `${label}${stageLabel} Videos: ${rows.length}`
+  if (isListQuestion(original) || follow) return `${label}${stageLabel === 'Total' ? 'Content' : stageLabel} Videos: ${rows.length}\n\n${rows.length ? rows.map((r, i) => `${i + 1}. ${nameOf(r)}`).join('\n') : 'No matching videos found.'}`
   return null
 }
 
@@ -146,7 +149,6 @@ function answerPosts(question, history, posts) {
   const effective = effectiveQuestion(original, history)
   const q = normalize(original)
   const source = normalize(effective)
-  const follow = isFollowup(original)
   const uploadIntent = questionHasUpload(q) || questionHasUpload(source)
   const postIntent = questionHasPost(q) || questionHasPost(source)
   if (!uploadIntent && !postIntent) return null
@@ -155,15 +157,16 @@ function answerPosts(question, history, posts) {
   let rows = posts.filter(Boolean)
   if (channel) rows = rows.filter((r) => channelOf(r) === channel)
 
-  if (uploadIntent) rows = rows.filter((r) => statusOf(r).includes('upload'))
-  else if (postIntent) rows = rows.filter((r) => statusOf(r).includes('post') || statusOf(r).includes('publish'))
+  // IMPORTANT: Uploaded and Scheduled are different statuses. Never return scheduled rows for an upload question.
+  if (uploadIntent) rows = rows.filter((r) => statusOf(r) === 'uploaded' || statusOf(r).includes('upload'))
+  if (!uploadIntent && postIntent) rows = rows.filter((r) => statusOf(r) === 'posted' || statusOf(r).includes('post') || statusOf(r).includes('publish'))
 
-  const dateFilter = dateFilterFromQuestion(original) || (follow ? dateFilterFromQuestion(effective) : null)
+  const dateFilter = dateFilterFromQuestion(original) || (isFollowup(original) ? dateFilterFromQuestion(effective) : null)
   if (dateFilter) rows = rows.filter((r) => dhakaDateKey(r.scheduled_at) === dateFilter.key)
 
   const label = channel ? `${channel} ` : ''
   const statusLabel = uploadIntent ? 'Uploaded' : 'Posted'
-  if (isCountQuestion(q) && !isListQuestion(q)) return `${label}${dateFilter ? dateFilter.label + ' ' : ''}${statusLabel} Videos: ${rows.length}`
+  if (isCountQuestion(original) && !isListQuestion(original)) return `${label}${dateFilter ? dateFilter.label + ' ' : ''}${statusLabel} Videos: ${rows.length}`
 
   return `${label}${dateFilter ? dateFilter.label + ' ' : ''}${statusLabel} Videos: ${rows.length}\n\n${rows.length ? rows.slice(0, 200).map((r, i) => `${i + 1}. ${nameOf(r)}${r.channel ? ` [${r.channel}]` : ''}${r.content_type ? ` — ${r.content_type}` : ''}${r.scheduled_at ? ` — ${dhakaDateTime(r.scheduled_at)}` : ''}`).join('\n') : 'No matching videos found.'}`
 }
@@ -173,25 +176,28 @@ function answerSchedules(question, history, posts) {
   const effective = effectiveQuestion(original, history)
   const q = normalize(original)
   const source = normalize(effective)
-  if (!questionHasSchedule(q) && !questionHasSchedule(source)) return null
   if (questionHasUpload(q) || questionHasPost(q)) return null
+  if (!questionHasSchedule(q) && !questionHasSchedule(source)) return null
 
   const channel = extractChannel(q) || extractChannel(source)
   let rows = posts.filter((p) => statusOf(p) === 'scheduled' && p?.scheduled_at)
   if (channel) rows = rows.filter((p) => channelOf(p) === channel)
+
   const dateFilter = dateFilterFromQuestion(original) || (isFollowup(original) ? dateFilterFromQuestion(effective) : null)
   if (dateFilter) rows = rows.filter((p) => dhakaDateKey(p.scheduled_at) === dateFilter.key)
 
   const label = channel ? `${channel} ` : ''
   const dateLabel = dateFilter ? `${dateFilter.label} ` : ''
+  if (isCountQuestion(original) && !questionHasTime(original)) return `${label}${dateLabel}Scheduled Posts: ${rows.length}`
+
   return `${label}${dateLabel}Scheduled Posts: ${rows.length}\n\n${rows.length ? rows.map((p, i) => `${i + 1}. ${nameOf(p)}${p.channel ? ` [${p.channel}]` : ''} — ${dhakaDateTime(p.scheduled_at)}${p.content_type ? ` — ${p.content_type}` : ''}${p.platform ? ` — ${p.platform}` : ''}`).join('\n') : 'No scheduled posts found.'}`
 }
 
 function answerByName(question, contents, posts) {
   const q = normalize(question)
-  const id = q.match(/\b(hhd|bhd|dhd)\s*\d{2,}\b/i)
-  if (!id) return null
-  const key = id[0].replace(/\s+/g, '').toUpperCase()
+  const m = q.match(/\b(?:hhd|bhd|dhd)\s*\d{2,}\b/i)
+  if (!m) return null
+  const key = m[0].replace(/\s+/g, '').toUpperCase()
   const foundContents = contents.filter((r) => normalize(nameOf(r)).replace(/\s+/g, '') === key)
   const foundPosts = posts.filter((r) => normalize(nameOf(r)).replace(/\s+/g, '') === key)
   if (!foundContents.length && !foundPosts.length) return `No data found for ${key}.`
@@ -211,7 +217,7 @@ function answerSummary(question, contents, posts) {
 }
 
 function buildAnswer(question, history, contents, posts) {
-  // Order matters: date + uploaded/posted must never be mistaken for a schedule query.
+  // Specific intents must run before generic schedule/date detection.
   return answerByName(question, contents, posts) ||
     answerPosts(question, history, posts) ||
     answerSchedules(question, history, posts) ||
@@ -241,7 +247,8 @@ export default function Chatbot() {
       const posts = unwrapRows(postsResult?.data)
       const localAnswer = buildAnswer(question, history, contents, posts)
 
-      const recognized = questionHasVideo(question) || questionHasUpload(question) || questionHasPost(question) || questionHasSchedule(question) || extractChannel(question) || extractStage(question) || isFollowup(question) || /কত|কয়|কয়|মোট|total|count|how many|name|নাম/.test(normalize(question))
+      // Do not send recognizable data questions to the generic AI endpoint.
+      const recognized = questionHasVideo(question) || questionHasUpload(question) || questionHasPost(question) || questionHasSchedule(question) || extractChannel(question) || extractStage(question) || isFollowup(question) || isCountQuestion(question)
       let serverAnswer = ''
       if (!localAnswer && !recognized) {
         try {
