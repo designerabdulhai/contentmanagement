@@ -36,7 +36,12 @@ export default function Chatbot(){
 
   const submit=e=>{e.preventDefault();ask(message)}
 
-  if(!open)return <button onClick={()=>setOpen(true)} aria-label="Open App Assistant" style={{position:'fixed',right:24,bottom:24,width:52,height:52,border:0,borderRadius:'50%',background:'#6c5ce7',color:'#fff',fontWeight:800,cursor:'pointer',boxShadow:'0 10px 30px rgba(0,0,0,.18)',zIndex:1000}}>AI</button>
+  if(!open)return <button onClick={()=>setOpen(true)} aria-label="Open App Assistant" title="Open App Assistant" style={{position:'fixed',right:24,bottom:24,width:56,height:56,border:0,borderRadius:'50%',background:'#6c5ce7',color:'#fff',cursor:'pointer',boxShadow:'0 10px 30px rgba(0,0,0,.18)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}}>
+    <svg width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 8.7 3.9 8.38 8.38 0 0 1 12.5 3h.5a8.5 8.5 0 0 1 8 8v.5Z"/>
+      <path d="M8 12h.01M12 12h.01M16 12h.01" strokeWidth="2.5"/>
+    </svg>
+  </button>
 
   return <div style={{position:'fixed',right:24,bottom:24,width:340,maxWidth:'calc(100vw - 32px)',height:520,maxHeight:'calc(100vh - 48px)',background:'#fff',borderRadius:18,boxShadow:'0 18px 60px rgba(0,0,0,.22)',overflow:'hidden',zIndex:1000,display:'flex',flexDirection:'column',border:'1px solid #e8e8ef'}}>
     <div style={{padding:'14px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid #eee'}}>
