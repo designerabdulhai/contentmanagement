@@ -51,7 +51,7 @@ async function copyPath(path){
 }
 
 export default function Content(){
-  const [items,setItems]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[search,setSearch]=useState(''),[tab,setTab]=useState('all'),[channelFilter,setChannelFilter]=useState('all'),[showModal,setShowModal]=useState(false),[editing,setEditing]=useState(null),[saving,setSaving]=useState(false)
+  const [items,setItems]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[search,setSearch]=useState(''),[tab,setTab]=useState('all'),[channelFilter,setChannelFilter]=useState('all'),[summaryFilter,setSummaryFilter]=useState(null),[showModal,setShowModal]=useState(false),[editing,setEditing]=useState(null),[saving,setSaving]=useState(false)
   const load=()=>api.get('/contents').then(r=>setItems(Array.isArray(r.data)?r.data:[])).catch(e=>setError(e.message||'Unable to load content')).finally(()=>setLoading(false))
   useEffect(()=>{load()},[])
   const counts=useMemo(()=>items.reduce((acc,item)=>{acc[stageOf(item)]+=1;return acc},{ready:0,running:0,uploaded:0}),[items])
@@ -61,7 +61,18 @@ export default function Content(){
     acc[ch]={listed:channelItems.filter(isListedVideo).length,recorder:channelItems.filter(isRecorderVideo).length,running:channelItems.filter(isRunningVideo).length}
     return acc
   },{}),[items])
-  const visible=useMemo(()=>{const q=search.trim().toLowerCase();return items.filter(item=>{const matchesTab=tab==='all'||stageOf(item)===tab;const matchesChannel=channelFilter==='all'||String(item.channel||'').toUpperCase()===channelFilter;const matchesSearch=!q||[item.name,item.channel,item.document_link,item.file_path].some(v=>String(v||'').toLowerCase().includes(q));return matchesTab&&matchesChannel&&matchesSearch})},[items,tab,channelFilter,search])
+  const visible=useMemo(()=>{const q=search.trim().toLowerCase();return items.filter(item=>{
+    const itemChannel=String(item.channel||'').toUpperCase()
+    const matchesSummary=!summaryFilter||(
+      itemChannel===summaryFilter.channel &&
+      (summaryFilter.metric==='listed'?isListedVideo(item):summaryFilter.metric==='recorder'?isRecorderVideo(item):isRunningVideo(item))
+    )
+    const matchesTab=tab==='all'||stageOf(item)===tab
+    const matchesChannel=channelFilter==='all'||itemChannel===channelFilter
+    const matchesSearch=!q||[item.name,item.channel,item.document_link,item.file_path].some(v=>String(v||'').toLowerCase().includes(q))
+    return matchesSummary&&matchesTab&&matchesChannel&&matchesSearch
+  })},[items,tab,channelFilter,search,summaryFilter])
+  const selectSummary=(channel,metric)=>{setSummaryFilter(current=>current?.channel===channel&&current?.metric===metric?null:{channel,metric});setTab('all');setChannelFilter('all')}
   const save=async payload=>{setSaving(true);setError('');try{const r=editing?await api.put(`/contents/${editing.id}`,payload):await api.post('/contents',payload);setItems(current=>editing?current.map(item=>item.id===editing.id?r.data:item):[r.data,...current]);setShowModal(false);setEditing(null)}catch(e){setError(e.message||'Unable to save content')}finally{setSaving(false)}}
   const updateStatus=async(item,field,value)=>{setError('');const next={...item,[field]:value};setItems(current=>current.map(row=>row.id===item.id?next:row));try{const r=await api.put(`/contents/${item.id}`,next);setItems(current=>current.map(row=>row.id===item.id?r.data:row))}catch(e){setItems(current=>current.map(row=>row.id===item.id?item:row));setError(e.message||'Unable to update status')}}
   const updateEmergency=async(item,checked)=>{setError('');const next={...item,emergency:checked?1:0};setItems(current=>current.map(row=>row.id===item.id?next:row));try{const r=await api.put(`/contents/${item.id}`,next);setItems(current=>current.map(row=>row.id===item.id?r.data:row))}catch(e){setItems(current=>current.map(row=>row.id===item.id?item:row));setError(e.message||'Unable to update emergency status')}}
@@ -76,9 +87,11 @@ export default function Content(){
         return <div className={`content-summary-channel content-summary-${ch.toLowerCase()}`} key={ch}>
           <div className="content-summary-title"><span>{ch}</span>{recordMessage&&<span className="content-summary-record-message">{recordMessage}</span>}</div>
           <div className="content-summary-metrics">
-            <div className="content-summary-metric"><span className="content-summary-dot listed"></span><div><span>Total Listed Video</span><strong>{videoSummary[ch]?.listed||0}</strong></div></div>
-            <div className="content-summary-metric"><span className="content-summary-dot recorder"></span><div><span>Total Recorder Video</span><strong>{recorderCount}</strong></div></div>
-            <div className="content-summary-metric"><span className="content-summary-dot running"></span><div><span>Total Running Video</span><strong>{videoSummary[ch]?.running||0}</strong></div></div>
+            {[
+              ['listed','Total Listed Video','listed'],
+              ['recorder','Total Recorder Video','recorder'],
+              ['running','Total Running Video','running']
+            ].map(([metric,label,dot])=><button key={metric} type="button" className={`content-summary-metric ${summaryFilter?.channel===ch&&summaryFilter?.metric===metric?'active':''}`} onClick={()=>selectSummary(ch,metric)} title={`Show ${label} for ${ch}`}><span className={`content-summary-dot ${dot}`}></span><div><span>{label}</span><strong>{videoSummary[ch]?.[metric]||0}</strong></div></button>)}
           </div>
         </div>
       })}
@@ -87,10 +100,10 @@ export default function Content(){
       <input className="search content-search" placeholder="Search content" value={search} onChange={e=>setSearch(e.target.value)} />
       <div className="content-filter-groups">
         <div className="content-channel-tabs" role="tablist" aria-label="Channel filter">
-          {[['all','All Channels',items.length],...CHANNELS.map(ch=>[ch,ch,channelCounts[ch]])].map(([key,label,count])=><button key={key} className={channelFilter===key?'active':''} type="button" onClick={()=>setChannelFilter(key)}>{label}<span>{count}</span></button>)}
+          {[['all','All Channels',items.length],...CHANNELS.map(ch=>[ch,ch,channelCounts[ch]])].map(([key,label,count])=><button key={key} className={channelFilter===key?'active':''} type="button" onClick={()=>{setChannelFilter(key);setSummaryFilter(null)}}>{label}<span>{count}</span></button>)}
         </div>
         <div className="content-tabs" role="tablist" aria-label="Status filter">
-          {[['all','All',items.length],['ready','Video Ready',counts.ready],['running','Running',counts.running],['uploaded','Uploaded',counts.uploaded]].map(([key,label,count])=><button key={key} className={tab===key?'active':''} type="button" onClick={()=>setTab(key)}>{label}<span>{count}</span></button>)}
+          {[['all','All',items.length],['ready','Video Ready',counts.ready],['running','Running',counts.running],['uploaded','Uploaded',counts.uploaded]].map(([key,label,count])=><button key={key} className={tab===key?'active':''} type="button" onClick={()=>{setTab(key);setSummaryFilter(null)}}>{label}<span>{count}</span></button>)}
         </div>
       </div>
     </div>
