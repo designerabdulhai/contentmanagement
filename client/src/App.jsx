@@ -97,6 +97,8 @@ export default function App(){
     return ()=>window.removeEventListener('navigateToList', onNavigateToList);
   },[])
 
+  // Keyboard shortcut: N = New Post.
+  // The '?' Help shortcut has been removed.
   useEffect(()=>{
     if (!user) return;
     const onKey = (e)=>{
@@ -105,7 +107,6 @@ export default function App(){
         if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA' || active.isContentEditable)) return;
         window.dispatchEvent(new CustomEvent('requestNewPost'));
       }
-      if(e.key==='?') alert('Keyboard shortcuts:\nN — New post\n? — Help');
     }
     window.addEventListener('keydown', onKey);
     return ()=>window.removeEventListener('keydown', onKey);
