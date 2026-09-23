@@ -18,6 +18,10 @@ function stageOf(item){
 
 function channelOf(item){ return String(item?.channel || '').trim().toUpperCase() }
 
+function isCountQuestion(lower){
+  return /\bhow many\b|\bcount\b|\btotal\b|কত|কয়|কয়|কয়টি|কয়টি|কয়টা|কয়টা|সংখ্যা|মোট/.test(lower)
+}
+
 function localVideoAnswer(question, contents){
   const lower = String(question || '').toLowerCase()
   if (!/video|content|ভিডিও|কনটেন্ট/.test(lower)) return null
@@ -31,12 +35,12 @@ function localVideoAnswer(question, contents){
 
   const rows = contents.filter(item => !channel || channelOf(item) === channel)
   const matching = stage ? rows.filter(item => stageOf(item) === stage) : rows
-  const asksCount = /\bhow many\b|\bcount\b|\btotal\b|কত|সংখ্যা|মোট/.test(lower)
+  const asksCount = isCountQuestion(lower)
   const asksList = /\bshow\b|\blist\b|\bwhich\b|\bwhat\b|কি|কী|দেখাও|লিস্ট/.test(lower)
 
   if (stage && asksCount) return `${channel ? channel + ' ' : ''}${stage} Video: ${matching.length}`
 
-  if (stage && (asksList || !channel || channel)) {
+  if (stage && asksList) {
     const title = `${channel ? channel + ' ' : ''}${stage} Video`
     if (!matching.length) return `${title}: 0\n\nNo matching videos found.`
     return `${title}: ${matching.length}\n\n${matching.map((item,index) => `${index + 1}. ${item.name}`).join('\n')}`
@@ -54,7 +58,7 @@ function localVideoAnswer(question, contents){
 function localEditingAnswer(question, contents){
   const lower = String(question || '').toLowerCase()
   if (!/edit|editing|এডিট|এডিটিং/.test(lower)) return null
-  if (!/video|ভিডিও|কত|সংখ্যা|মোট|how many|count|total/.test(lower)) return null
+  if (!/video|ভিডিও|কত|কয়|কয়|কয়টি|কয়টি|কয়টা|কয়টা|সংখ্যা|মোট|how many|count|total/.test(lower)) return null
 
   const channelMatch = lower.match(/\b(hhd|bhd|dhd)\b/i)
   const channel = channelMatch ? channelMatch[1].toUpperCase() : null
@@ -71,7 +75,6 @@ function dhakaDateKey(value){
   const raw=String(value).trim()
   if(!raw) return null
 
-  // Values without an explicit timezone are stored as Bangladesh local time.
   if(!/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw)){
     const match=raw.replace('T',' ').match(/^(\d{4}-\d{2}-\d{2})\s/)
     return match?.[1] || null
@@ -95,7 +98,8 @@ function dhakaTime(value){
 }
 
 function todayDhakaKey(offsetDays=0){
-  const now=new Date(Date.now()+offsetDays*86400000)
+  const now=new Date()
+  now.setDate(now.getDate()+offsetDays)
   return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(now)
 }
 
@@ -109,7 +113,7 @@ function localScheduleAnswer(question, posts){
   const scheduled=posts.filter(p=>String(p?.status||'').trim().toLowerCase()==='scheduled' && p?.scheduled_at && (!channel || channelOf(p)===channel))
   const today=/\btoday\b|আজ|আজকে/.test(lower)
   const tomorrow=/\btomorrow\b|আগামীকাল/.test(lower)
-  const asksCount=/\bhow many\b|\bcount\b|\btotal\b|কত|সংখ্যা|মোট/.test(lower)
+  const asksCount=isCountQuestion(lower)
   const asksWhen=/when|date|time|কবে|কখন|তারিখ|সময়|সময়/.test(lower)
 
   const formatPosts=(items, includeDate=true)=>items.map((p,index)=>`${index+1}. ${p.project_name||'Untitled'}${p.channel?` [${p.channel}]`:''} — ${includeDate?`${dhakaDateKey(p.scheduled_at)} `:''}${dhakaTime(p.scheduled_at)}${p.content_type?` — ${p.content_type}`:''}`).join('\n')
@@ -153,8 +157,6 @@ export default function Chatbot(){
     setMessages(current=>[...current,{role:'user',text:question}])
     setLoading(true)
     try{
-      // Read live data from the same API used by the app. This avoids relying on
-      // an AI/Worker deployment for exact counts, video lists, and schedules.
       const lower=question.toLowerCase()
       const wantsVideoData=/video|content|listed|record|recorder|running|edit|editing|ভিডিও|কনটেন্ট|লিস্টেড|রেকর্ড|রানিং|এডিট|এডিটিং/.test(lower)
       const wantsScheduleData=/schedule|scheduled|calendar|post|today|tomorrow|শিডিউল|ক্যালেন্ডার|পোস্ট|আজ|আজকে|আগামীকাল/.test(lower)
