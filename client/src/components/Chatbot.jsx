@@ -3,9 +3,10 @@ import api from '../api'
 
 const VIDEO_FIELDS = ['full_video_status','short_ex_status','short_top_status','style_ex_status','style_top_status']
 const starterQuestions = [
-  'Show me all HHD listed videos',
-  'How many recorder videos do HHD and BHD have?',
-  'Show me the running videos for BHD',
+  '1. BHD তে কয়টা ভিডিও রেকর্ড করা আছে?',
+  '2. HHD তে কয়টা ভিডিও রেকর্ড করা আছে?',
+  '3. কয়টি ভিডিও শিডিউল করা আছে? কবে এবং কখন?',
+  '4. এডিটিং করা আছে মোট কয়টি ভিডিও?',
 ]
 
 function stageOf(item){
@@ -48,6 +49,21 @@ function localVideoAnswer(question, contents){
   }
 
   return null
+}
+
+function localEditingAnswer(question, contents){
+  const lower = String(question || '').toLowerCase()
+  if (!/edit|editing|এডিট|এডিটিং/.test(lower)) return null
+  if (!/video|ভিডিও|কত|সংখ্যা|মোট|how many|count|total/.test(lower)) return null
+
+  const channelMatch = lower.match(/\b(hhd|bhd|dhd)\b/i)
+  const channel = channelMatch ? channelMatch[1].toUpperCase() : null
+  const rows = contents.filter(item => !channel || channelOf(item) === channel)
+  const editingCount = rows.reduce((total, item) => {
+    return total + VIDEO_FIELDS.filter(key => String(item?.[key] || '').trim().toLowerCase() === 'editing done').length
+  }, 0)
+
+  return `${channel ? channel + ' ' : ''}Total Editing Done Video: ${editingCount}`
 }
 
 function dhakaDateKey(value){
@@ -94,20 +110,28 @@ function localScheduleAnswer(question, posts){
   const today=/\btoday\b|আজ|আজকে/.test(lower)
   const tomorrow=/\btomorrow\b|আগামীকাল/.test(lower)
   const asksCount=/\bhow many\b|\bcount\b|\btotal\b|কত|সংখ্যা|মোট/.test(lower)
+  const asksWhen=/when|date|time|কবে|কখন|তারিখ|সময়|সময়/.test(lower)
+
+  const formatPosts=(items, includeDate=true)=>items.map((p,index)=>`${index+1}. ${p.project_name||'Untitled'}${p.channel?` [${p.channel}]`:''} — ${includeDate?`${dhakaDateKey(p.scheduled_at)} `:''}${dhakaTime(p.scheduled_at)}${p.content_type?` — ${p.content_type}`:''}`).join('\n')
 
   if(today || tomorrow){
     const key=todayDhakaKey(tomorrow?1:0)
     const matching=scheduled.filter(p=>dhakaDateKey(p.scheduled_at)===key)
     const title=`${channel?channel+' ':''}${tomorrow?'Tomorrow':'Today'} Scheduled Posts`
     if(!matching.length) return `${title}: 0\n\nNo scheduled posts found.`
-    return `${title}: ${matching.length}\n\n${matching.map((p,index)=>`${index+1}. ${p.project_name||'Untitled'}${p.channel?` [${p.channel}]`:''} — ${dhakaTime(p.scheduled_at)}${p.content_type?` — ${p.content_type}`:''}`).join('\n')}`
+    return `${title}: ${matching.length}\n\n${formatPosts(matching,false)}`
+  }
+
+  if(asksCount && asksWhen){
+    if(!scheduled.length) return `${channel?channel+' ':''}Total Scheduled Posts: 0\n\nNo scheduled posts found.`
+    return `${channel?channel+' ':''}Total Scheduled Posts: ${scheduled.length}\n\n${formatPosts(scheduled,true)}`
   }
 
   if(asksCount) return `${channel?channel+' ':''}Total Scheduled Posts: ${scheduled.length}`
 
   if(/show|list|which|what|কি|কী|দেখাও|লিস্ট/.test(lower)){
     if(!scheduled.length) return `${channel?channel+' ':''}Scheduled Posts: 0\n\nNo scheduled posts found.`
-    return `${channel?channel+' ':''}Scheduled Posts: ${scheduled.length}\n\n${scheduled.map((p,index)=>`${index+1}. ${p.project_name||'Untitled'}${p.channel?` [${p.channel}]`:''} — ${dhakaDateKey(p.scheduled_at)} ${dhakaTime(p.scheduled_at)}${p.content_type?` — ${p.content_type}`:''}`).join('\n')}`
+    return `${channel?channel+' ':''}Scheduled Posts: ${scheduled.length}\n\n${formatPosts(scheduled,true)}`
   }
 
   return null
@@ -132,7 +156,7 @@ export default function Chatbot(){
       // Read live data from the same API used by the app. This avoids relying on
       // an AI/Worker deployment for exact counts, video lists, and schedules.
       const lower=question.toLowerCase()
-      const wantsVideoData=/video|content|listed|record|recorder|running|ভিডিও|কনটেন্ট|লিস্টেড|রেকর্ড|রানিং/.test(lower)
+      const wantsVideoData=/video|content|listed|record|recorder|running|edit|editing|ভিডিও|কনটেন্ট|লিস্টেড|রেকর্ড|রানিং|এডিট|এডিটিং/.test(lower)
       const wantsScheduleData=/schedule|scheduled|calendar|post|today|tomorrow|শিডিউল|ক্যালেন্ডার|পোস্ট|আজ|আজকে|আগামীকাল/.test(lower)
 
       if(wantsVideoData || wantsScheduleData){
@@ -146,6 +170,13 @@ export default function Chatbot(){
         if(wantsVideoData){
           const contentResponse=results[resultIndex++]
           contents=Array.isArray(contentResponse.data)?contentResponse.data:[]
+
+          const editingAnswer=localEditingAnswer(question,contents)
+          if(editingAnswer){
+            setMessages(current=>[...current,{role:'assistant',text:editingAnswer}])
+            return
+          }
+
           const localAnswer=localVideoAnswer(question,contents)
           if(localAnswer){
             setMessages(current=>[...current,{role:'assistant',text:localAnswer}])
