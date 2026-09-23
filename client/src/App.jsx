@@ -8,6 +8,8 @@ import Login from './pages/Login'
 import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
 import PostForm from './components/PostForm'
+import Chatbot from './components/Chatbot'
+import './chatbot.css'
 import api, { TOKEN_KEY } from './api'
 
 const defaultProfile = { name: 'Owner Name', email: '', photo: '' };
@@ -140,6 +142,7 @@ export default function App(){
           </div>
         </div>
       )}
+      <Chatbot />
     </div>
   )
 }
