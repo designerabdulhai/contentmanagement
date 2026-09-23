@@ -51,8 +51,8 @@ function videoStatuses(item) {
 
 function videoStage(item) {
   const statuses = videoStatuses(item);
-  if (statuses.every((status) => !status)) return 'Listed';
-  if (statuses.every((status) => status === 'Record')) return 'Recorder';
+  if (statuses.every((status) => !status || status.toLowerCase() === 'not set')) return 'Listed';
+  if (statuses.every((status) => status.toLowerCase() === 'record')) return 'Recorder';
   return 'Running';
 }
 
@@ -80,6 +80,52 @@ function extractText(response) {
     }
   }
   return chunks.join('\n').trim();
+}
+
+function detectedChannel(question) {
+  const match = String(question || '').match(/\b(HHD|BHD|DHD)\b/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
+function requestedStage(question) {
+  const lower = String(question || '').toLowerCase();
+  if (/\blisted\b|not\s*set|ready/.test(lower)) return 'Listed';
+  if (/\brecorder\b|\brecorded\b|\brecord\b/.test(lower)) return 'Recorder';
+  if (/\brunning\b|in\s*progress|working/.test(lower)) return 'Running';
+  return null;
+}
+
+function directVideoAnswer(question, contents, channelSummary) {
+  const lower = String(question || '').toLowerCase();
+  const asksVideo = /video|content/.test(lower);
+  const stage = requestedStage(question);
+  const channel = detectedChannel(question);
+  if (!asksVideo || (!stage && !channel)) return null;
+
+  const rows = contents.filter((item) => !channel || String(item.channel).toUpperCase() === channel);
+
+  if (/\bhow many\b|\bcount\b|total/.test(lower) && stage) {
+    const count = rows.filter((item) => item.stage === stage).length;
+    return `${channel ? channel + ' ' : ''}${stage} Video: ${count}`;
+  }
+
+  if (stage) {
+    const matching = rows.filter((item) => item.stage === stage);
+    const title = `${channel ? channel + ' ' : ''}${stage} Video`;
+    if (!matching.length) return `${title}: 0\n\nNo matching videos found.`;
+    return `${title}: ${matching.length}\n\n${matching.map((item, index) => `${index + 1}. ${item.name}`).join('\n')}`;
+  }
+
+  if (/\bhow many\b|\bcount\b|total/.test(lower) && channel) {
+    return `${channel} Total Content: ${rows.length}`;
+  }
+
+  if (/\bshow\b|\blist\b|\bwhich\b|\bwhat\b/.test(lower) && channel) {
+    if (!rows.length) return `${channel}: 0\n\nNo content found.`;
+    return `${channel} Content: ${rows.length}\n\n${rows.map((item, index) => `${index + 1}. ${item.name} — ${item.stage}`).join('\n')}`;
+  }
+
+  return null;
 }
 
 export async function handleChat(request, env) {
@@ -112,6 +158,11 @@ export async function handleChat(request, env) {
       running: rows.filter((item) => item.stage === 'Running').length,
     }];
   }));
+
+  // Answer common video-list/count questions directly from D1 so the result is exact
+  // and does not depend on the language model interpreting the database context.
+  const directAnswer = directVideoAnswer(question, contents, channelSummary);
+  if (directAnswer) return json({ answer: directAnswer });
 
   const lower = question.toLowerCase();
   const wantsContent = /video|listed|record|recorder|running|content/.test(lower);
