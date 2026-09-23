@@ -84,6 +84,34 @@ function localEditingAnswer(question, contents){
   return `${channel ? channel + ' ' : ''}Total Editing Done Video: ${editingCount}`
 }
 
+function localEditingList(question, contents){
+  const lower = String(question || '').toLowerCase()
+  if (!/edit|editing|এডিট|এডিটিং/.test(lower)) return null
+  if (!wantsList(lower)) return null
+  const channel = getChannel(lower)
+  const rows = contents.filter(item => !channel || channelOf(item) === channel)
+  const matching = rows.filter(item => VIDEO_FIELDS.some(key => String(item?.[key] || '').trim().toLowerCase() === 'editing done'))
+  const title = `${channel ? channel + ' ' : ''}Editing Done Videos`
+  if (!matching.length) return `${title}: 0\n\nNo editing-done videos found.`
+  return `${title}: ${matching.length}\n\n${matching.map((item,index) => `${index + 1}. ${item.name}`).join('\n')}`
+}
+
+function inferFollowup(question, previousQuestion){
+  const current = String(question || '').toLowerCase().replace(/[।?？!！]/g, ' ').replace(/\s+/g, ' ').trim()
+  const previous = String(previousQuestion || '').toLowerCase().replace(/[।?？!！]/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!previous || !wantsList(current)) return null
+
+  const currentIsVagueList = /^(?:কি\s*কি|কী\s*কী|কোন\s*কোন|কি কি ভিডিও|কী কী ভিডিও|কোন কোন ভিডিও|what|which|what videos|which videos|show me|show list|list them|give me the list)\s*$/.test(current)
+  if (!currentIsVagueList) return null
+
+  if (/edit|editing|এডিট|এডিটিং/.test(previous)) return 'editing'
+  if (/\brecorded\b|\brecord\b|\brecorder\b|রেকর্ডেড|রেকর্ড|রেকর্ডার/.test(previous)) return 'recorded'
+  if (/\brunning\b|in\s*progress|working|রানিং|চলছে/.test(previous)) return 'running'
+  if (/\blisted\b|not\s*set|ready|লিস্টেড|তালিকাভুক্ত/.test(previous)) return 'listed'
+  if (/schedule|scheduled|calendar|শিডিউল|ক্যালেন্ডার/.test(previous)) return 'scheduled'
+  return null
+}
+
 function dhakaDateKey(value){
   if(!value) return null
   const raw = String(value).trim()
@@ -175,13 +203,15 @@ export default function Chatbot(){
   const ask = async(text) => {
     const question = String(text || '').trim()
     if(!question || loading) return
+    const previousUserQuestion = [...messages].reverse().find(item => item.role === 'user')?.text || ''
+    const followupType = inferFollowup(question, previousUserQuestion)
     setMessage('')
     setMessages(current=>[...current,{role:'user',text:question}])
     setLoading(true)
     try{
       const lower = question.toLowerCase()
-      const wantsVideoData = /video|content|listed|record|recorder|running|edit|editing|ভিডিও|কনটেন্ট|লিস্টেড|রেকর্ড|রানিং|এডিট|এডিটিং/.test(lower)
-      const wantsScheduleData = /schedule|scheduled|calendar|post|today|tomorrow|শিডিউল|ক্যালেন্ডার|পোস্ট|আজ|আজকে|আজকের|আগামীকাল/.test(lower)
+      const wantsVideoData = /video|content|listed|record|recorder|running|edit|editing|ভিডিও|কনটেন্ট|লিস্টেড|রেকর্ড|রানিং|এডিট|এডিটিং/.test(lower) || Boolean(followupType)
+      const wantsScheduleData = /schedule|scheduled|calendar|post|today|tomorrow|শিডিউল|ক্যালেন্ডার|পোস্ট|আজ|আজকে|আজকের|আগামীকাল/.test(lower) || followupType === 'scheduled'
 
       if(wantsVideoData || wantsScheduleData){
         const requests = []
@@ -192,15 +222,19 @@ export default function Chatbot(){
 
         if(wantsVideoData){
           const contents = unwrapArray(results[resultIndex++])
-          const editingAnswer = localEditingAnswer(question,contents)
-          if(editingAnswer){ setMessages(current=>[...current,{role:'assistant',text:editingAnswer}]); return }
-          const localAnswer = localVideoAnswer(question,contents)
+          let localAnswer = null
+          if(followupType === 'editing') localAnswer = localEditingList(question,contents) || localEditingList(previousUserQuestion,contents)
+          else if(followupType === 'recorded') localAnswer = localVideoAnswer(`${question} recorded`,contents) || localVideoAnswer(`${previousUserQuestion} show list`,contents)
+          else if(followupType === 'running') localAnswer = localVideoAnswer(`${question} running`,contents) || localVideoAnswer(`${previousUserQuestion} show list`,contents)
+          else if(followupType === 'listed') localAnswer = localVideoAnswer(`${question} listed`,contents) || localVideoAnswer(`${previousUserQuestion} show list`,contents)
+          else if(!followupType) localAnswer = localEditingAnswer(question,contents) || localVideoAnswer(question,contents)
           if(localAnswer){ setMessages(current=>[...current,{role:'assistant',text:localAnswer}]); return }
         }
 
         if(wantsScheduleData){
           const posts = unwrapArray(results[resultIndex++])
-          const localAnswer = localScheduleAnswer(question,posts)
+          let localAnswer = localScheduleAnswer(question,posts)
+          if(followupType === 'scheduled') localAnswer = localScheduleAnswer(`${previousUserQuestion} show list`,posts) || localAnswer
           if(localAnswer){ setMessages(current=>[...current,{role:'assistant',text:localAnswer}]); return }
         }
       }
