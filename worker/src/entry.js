@@ -1,4 +1,5 @@
 import api from './index.js';
+import { handleChat } from './chat.js';
 
 const SCHEDULER_VERSION = '2026-09-05-auto-status-v4';
 const DHAKA_OFFSET_MINUTES = 6 * 60;
@@ -137,6 +138,10 @@ async function runScheduler(env) {
 
 export default {
   async fetch(request, env, ctx) {
+    const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+    if (pathname === '/api/chat' || pathname === '/chat') {
+      return handleChat(request, env);
+    }
     return api.fetch(request, env, ctx);
   },
 
