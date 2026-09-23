@@ -2,12 +2,22 @@ import React, { useEffect, useRef, useState } from 'react'
 import api from '../api'
 
 const VIDEO_FIELDS = ['full_video_status','short_ex_status','short_top_status','style_ex_status','style_top_status']
+
 const starterQuestions = [
   '1. BHD তে কয়টা ভিডিও রেকর্ড করা আছে?',
   '2. HHD তে কয়টা ভিডিও রেকর্ড করা আছে?',
   '3. কয়টি ভিডিও শিডিউল করা আছে? কবে এবং কখন?',
   '4. এডিটিং করা আছে মোট কয়টি ভিডিও?',
 ]
+
+function normalizeText(value){
+  return String(value || '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[।?？!！]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 function channelOf(item){ return String(item?.channel || '').trim().toUpperCase() }
 
@@ -26,8 +36,15 @@ function wantsList(text){
   return /show|list|which|what|give|দেখাও|লিস্ট|তালিকা|কি\s*কি|কী\s*কী|কোন\s*কোন/.test(text)
 }
 
+function isVagueListQuestion(text){
+  const value = normalizeText(text)
+    .replace(/^(please|pls|দয়া করে|দয়া করে)\s+/,'')
+    .trim()
+  return /^(?:কি\s*কি|কী\s*কী|কোন\s*কোন|কি কি ভিডিও|কী কী ভিডিও|কোন কোন ভিডিও|what|which|what videos|which videos|show me|show list|list them|give me the list)$/.test(value)
+}
+
 function getChannel(text){
-  const match = text.match(/(?:^|[^a-z])(hhd|bhd|dhd)(?:$|[^a-z])/i)
+  const match = normalizeText(text).match(/(?:^|[^a-z])(hhd|bhd|dhd)(?:$|[^a-z])/i)
   return match ? match[1].toUpperCase() : null
 }
 
@@ -42,7 +59,7 @@ function unwrapArray(response){
 }
 
 function localVideoAnswer(question, contents){
-  const lower = String(question || '').toLowerCase().replace(/[।?？!！]/g, ' ').replace(/\s+/g, ' ').trim()
+  const lower = normalizeText(question)
   if (!/video|content|ভিডিও|কনটেন্ট/.test(lower)) return null
 
   const channel = getChannel(lower)
@@ -74,7 +91,7 @@ function localVideoAnswer(question, contents){
 }
 
 function localEditingAnswer(question, contents){
-  const lower = String(question || '').toLowerCase()
+  const lower = normalizeText(question)
   if (!/edit|editing|এডিট|এডিটিং/.test(lower)) return null
   if (!/video|ভিডিও|কত|কয়|কয়|কয়টি|কয়টি|কয়টা|কয়টা|সংখ্যা|মোট|how\s*many|count|total/.test(lower)) return null
 
@@ -85,7 +102,7 @@ function localEditingAnswer(question, contents){
 }
 
 function localEditingList(question, contents){
-  const lower = String(question || '').toLowerCase()
+  const lower = normalizeText(question)
   if (!/edit|editing|এডিট|এডিটিং/.test(lower)) return null
   if (!wantsList(lower)) return null
   const channel = getChannel(lower)
@@ -97,12 +114,9 @@ function localEditingList(question, contents){
 }
 
 function inferFollowup(question, previousQuestion){
-  const current = String(question || '').toLowerCase().replace(/[।?？!！]/g, ' ').replace(/\s+/g, ' ').trim()
-  const previous = String(previousQuestion || '').toLowerCase().replace(/[।?？!！]/g, ' ').replace(/\s+/g, ' ').trim()
-  if (!previous || !wantsList(current)) return null
-
-  const currentIsVagueList = /^(?:কি\s*কি|কী\s*কী|কোন\s*কোন|কি কি ভিডিও|কী কী ভিডিও|কোন কোন ভিডিও|what|which|what videos|which videos|show me|show list|list them|give me the list)\s*$/.test(current)
-  if (!currentIsVagueList) return null
+  const current = normalizeText(question)
+  const previous = normalizeText(previousQuestion)
+  if (!previous || !isVagueListQuestion(current)) return null
 
   if (/edit|editing|এডিট|এডিটিং/.test(previous)) return 'editing'
   if (/\brecorded\b|\brecord\b|\brecorder\b|রেকর্ডেড|রেকর্ড|রেকর্ডার/.test(previous)) return 'recorded'
@@ -146,7 +160,7 @@ function todayDhakaKey(offsetDays=0){
 }
 
 function localScheduleAnswer(question, posts){
-  const lower = String(question || '').toLowerCase().replace(/[।?？!！]/g, ' ').replace(/\s+/g, ' ').trim()
+  const lower = normalizeText(question)
   const asksSchedule = /schedule|scheduled|calendar|post|today|tomorrow|শিডিউল|শিডিউলড|ক্যালেন্ডার|পোস্ট|আজ|আজকে|আজকের|আগামীকাল/.test(lower)
   if(!asksSchedule) return null
 
@@ -203,14 +217,18 @@ export default function Chatbot(){
   const ask = async(text) => {
     const question = String(text || '').trim()
     if(!question || loading) return
+
     const previousUserQuestion = [...messages].reverse().find(item => item.role === 'user')?.text || ''
     const followupType = inferFollowup(question, previousUserQuestion)
+    const vagueList = isVagueListQuestion(question)
+
     setMessage('')
     setMessages(current=>[...current,{role:'user',text:question}])
     setLoading(true)
+
     try{
-      const lower = question.toLowerCase()
-      const wantsVideoData = /video|content|listed|record|recorder|running|edit|editing|ভিডিও|কনটেন্ট|লিস্টেড|রেকর্ড|রানিং|এডিট|এডিটিং/.test(lower) || Boolean(followupType)
+      const lower = normalizeText(question)
+      const wantsVideoData = /video|content|listed|record|recorder|running|edit|editing|ভিডিও|কনটেন্ট|লিস্টেড|রেকর্ড|রানিং|এডিট|এডিটিং/.test(lower) || Boolean(followupType) || vagueList
       const wantsScheduleData = /schedule|scheduled|calendar|post|today|tomorrow|শিডিউল|ক্যালেন্ডার|পোস্ট|আজ|আজকে|আজকের|আগামীকাল/.test(lower) || followupType === 'scheduled'
 
       if(wantsVideoData || wantsScheduleData){
@@ -223,19 +241,33 @@ export default function Chatbot(){
         if(wantsVideoData){
           const contents = unwrapArray(results[resultIndex++])
           let localAnswer = null
-          if(followupType === 'editing') localAnswer = localEditingList(question,contents) || localEditingList(previousUserQuestion,contents)
-          else if(followupType === 'recorded') localAnswer = localVideoAnswer(`${question} recorded`,contents) || localVideoAnswer(`${previousUserQuestion} show list`,contents)
-          else if(followupType === 'running') localAnswer = localVideoAnswer(`${question} running`,contents) || localVideoAnswer(`${previousUserQuestion} show list`,contents)
-          else if(followupType === 'listed') localAnswer = localVideoAnswer(`${question} listed`,contents) || localVideoAnswer(`${previousUserQuestion} show list`,contents)
-          else if(!followupType) localAnswer = localEditingAnswer(question,contents) || localVideoAnswer(question,contents)
-          if(localAnswer){ setMessages(current=>[...current,{role:'assistant',text:localAnswer}]); return }
+
+          if(followupType === 'editing'){
+            localAnswer = localEditingList(previousUserQuestion,contents)
+          } else if(followupType === 'recorded'){
+            localAnswer = localVideoAnswer(`${previousUserQuestion} show list`,contents)
+          } else if(followupType === 'running'){
+            localAnswer = localVideoAnswer(`${previousUserQuestion} show list`,contents)
+          } else if(followupType === 'listed'){
+            localAnswer = localVideoAnswer(`${previousUserQuestion} show list`,contents)
+          } else if(!followupType && !vagueList){
+            localAnswer = localEditingAnswer(question,contents) || localVideoAnswer(question,contents)
+          }
+
+          if(localAnswer){
+            setMessages(current=>[...current,{role:'assistant',text:localAnswer}])
+            return
+          }
         }
 
         if(wantsScheduleData){
           const posts = unwrapArray(results[resultIndex++])
           let localAnswer = localScheduleAnswer(question,posts)
           if(followupType === 'scheduled') localAnswer = localScheduleAnswer(`${previousUserQuestion} show list`,posts) || localAnswer
-          if(localAnswer){ setMessages(current=>[...current,{role:'assistant',text:localAnswer}]); return }
+          if(localAnswer){
+            setMessages(current=>[...current,{role:'assistant',text:localAnswer}])
+            return
+          }
         }
       }
 
@@ -244,7 +276,9 @@ export default function Chatbot(){
       setMessages(current=>[...current,{role:'assistant',text:answer || 'I could not generate an answer.'}])
     }catch(e){
       setMessages(current=>[...current,{role:'assistant',text:e.message || 'Sorry, I could not reach the AI assistant.'}])
-    }finally{ setLoading(false) }
+    }finally{
+      setLoading(false)
+    }
   }
 
   const submit = e => { e.preventDefault(); ask(message) }
