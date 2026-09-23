@@ -8,6 +8,38 @@ const starterQuestions=[
   '4. এডিটিং করা আছে মোট কয়টি ভিডিও?',
 ]
 
+const VIDEO_FIELDS=['full_video_status','short_ex_status','short_top_status','style_ex_status','style_top_status']
+const norm=v=>String(v??'').normalize('NFKC').toLowerCase().replace(/[।?？!！,，:：;；|]/g,' ').replace(/\s+/g,' ').trim()
+const channelOf=x=>String(x?.channel||'').trim().toUpperCase()
+const nameOf=x=>String(x?.name||x?.project_name||x?.project||x?.title||'Untitled')
+const statuses=x=>VIDEO_FIELDS.map(k=>String(x?.[k]??'').trim().toLowerCase())
+const isRecorder=x=>statuses(x).every(v=>v==='record')
+const isListed=x=>statuses(x).every(v=>v===''||v==='not set')
+const isRunning=x=>!isListed(x)&&!isRecorder(x)&&statuses(x).some(Boolean)
+const isEditingDone=x=>statuses(x).some(v=>v==='editing done'||v==='edited'||v==='edit done'||v.includes('editing done'))
+const countQuestion=q=>/how\s*many|how\s*much|count|total|number|কত|কয়|কয়|কয়টি|কয়টি|কয়টা|কয়টা|সংখ্যা|মোট/.test(norm(q))
+const listQuestion=q=>/show|list|which|what|give|name|names|বল|নাম|দেখাও|লিস্ট|তালিকা|কী\s*কী|কি\s*কি|কোন\s*কোন|কোনগুলো|কোন গুলো/.test(norm(q))
+const getChannel=q=>{const m=norm(q).match(/(?:^|[^a-z])(hhd|bhd|dhd)(?:$|[^a-z])/i);return m?m[1].toUpperCase():null}
+const getStage=q=>{const l=norm(q);if(/record|recorded|recorder|রেকর্ড|রেকর্ডেড|রেকর্ডার|রেকর্ড করা/.test(l))return'recorder';if(/editing|edited|edit done|এডিট|এডিটিং|এডিট করা/.test(l))return'editing';if(/running|in\s*progress|working|রানিং|চলছে/.test(l))return'running';if(/listed|not\s*set|ready|লিস্টেড|তালিকাভুক্ত/.test(l))return'listed';return null}
+const followup=q=>/^(নাম|নামগুলো|নাম বল|নাম বলো|কি কি|কী কী|কোনগুলো|কোন গুলো|কোন কোন|which|what|which ones|list|list them|show|show me|details|বিস্তারিত|আর কি|আর কী|আরও|এগুলো|ওগুলো)(\s*(বল|দাও|দেখাও))?$/.test(norm(q))
+
+function localVideoAnswer(question,history,contents){
+  const q=norm(question), previous=[...(history||[])].filter(x=>x?.role==='user').map(x=>String(x.text||'')).reverse().find(x=>!followup(x))||''
+  const source=followup(question)?previous:question
+  const channel=getChannel(q)||getChannel(source)
+  const stage=getStage(q)||getStage(source)
+  if(!stage&&!channel&&!/video|ভিডিও|content|কনটেন্ট/.test(q)&&!followup(question))return null
+  let rows=Array.isArray(contents)?contents.filter(Boolean):[]
+  if(channel)rows=rows.filter(x=>channelOf(x)===channel)
+  if(stage==='recorder')rows=rows.filter(isRecorder)
+  else if(stage==='listed')rows=rows.filter(isListed)
+  else if(stage==='running')rows=rows.filter(isRunning)
+  else if(stage==='editing')rows=rows.filter(isEditingDone)
+  if(countQuestion(q)&&!listQuestion(q))return `${channel?channel+' ':''}${stage==='recorder'?'Recorder':stage==='listed'?'Listed':stage==='running'?'Running':stage==='editing'?'Editing Done':'Total'} Videos: ${rows.length}`
+  if(listQuestion(q)||followup(question))return `${channel?channel+' ':''}${stage==='recorder'?'Recorder':stage==='listed'?'Listed':stage==='running'?'Running':stage==='editing'?'Editing Done':'Content'} Videos: ${rows.length}\n\n${rows.length?rows.map((x,i)=>`${i+1}. ${nameOf(x)}`).join('\n'):'No matching videos found.'}`
+  return null
+}
+
 export default function Chatbot(){
   const [open,setOpen]=useState(false)
   const [message,setMessage]=useState('')
@@ -26,10 +58,28 @@ export default function Chatbot(){
     setLoading(true)
     try{
       const response=await api.post('/chat',{message:question,history})
-      const answer=response?.data?.answer||response?.data?.message
+      let answer=response?.data?.answer||response?.data?.message||''
+
+      // The live API may still be on an older deployment that returns
+      // "not found". Use the same authenticated live Content endpoint as
+      // the Content page and answer common video questions locally instead
+      // of showing a false not-found message.
+      if(!answer||/^(not found|no data found|data not found)$/i.test(String(answer).trim())){
+        try{
+          const contentResponse=await api.get('/contents')
+          const localAnswer=localVideoAnswer(question,history,contentResponse?.data)
+          if(localAnswer)answer=localAnswer
+        }catch{}
+      }
+
       setMessages(cur=>[...cur,{role:'assistant',text:String(answer||'এই প্রশ্নের জন্য কোনো উত্তর পাওয়া যায়নি।')}])
     }catch(error){
-      const answer=error?.response?.data?.error||error?.message||'Unable to get answer.'
+      let answer=error?.response?.data?.error||error?.message||'Unable to get answer.'
+      try{
+        const contentResponse=await api.get('/contents')
+        const localAnswer=localVideoAnswer(question,history,contentResponse?.data)
+        if(localAnswer)answer=localAnswer
+      }catch{}
       setMessages(cur=>[...cur,{role:'assistant',text:String(answer)}])
     }finally{setLoading(false)}
   }
