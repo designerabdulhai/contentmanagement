@@ -8,49 +8,26 @@ const starterQuestions = [
   'এডিটিং করা আছে মোট কয়টি ভিডিও?',
 ]
 
-const VIDEO_FIELDS = [
-  'full_video_status',
-  'short_ex_status',
-  'short_top_status',
-  'style_ex_status',
-  'style_top_status',
-]
+const VIDEO_FIELDS = ['full_video_status', 'short_ex_status', 'short_top_status', 'style_ex_status', 'style_top_status']
 
-const normalize = (value) =>
-  String(value ?? '')
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/[।?？!！,，:：;；|()[\]{}]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-const textOf = (value) => String(value ?? '').trim()
+const textOf = (v) => String(v ?? '').trim()
+const normalize = (v) => textOf(v).normalize('NFKC').toLowerCase().replace(/[।?？!！,，:：;；|()[\]{}]/g, ' ').replace(/\s+/g, ' ').trim()
 const channelOf = (row) => textOf(row?.channel).toUpperCase()
 const nameOf = (row) => textOf(row?.name || row?.project_name || row?.project || row?.title || 'Untitled')
-
-const statusesOf = (row) => VIDEO_FIELDS.map((key) => textOf(row?.[key]).toLowerCase())
-const isListed = (row) => statusesOf(row).every((value) => value === '' || value === 'not set')
-const isRecorder = (row) => statusesOf(row).every((value) => value === 'record')
-const isEditingDone = (row) => statusesOf(row).some((value) =>
-  ['editing done', 'edited', 'edit done'].includes(value) || value.includes('editing done')
-)
+const statusOf = (row) => textOf(row?.status).toLowerCase()
+const statusesOf = (row) => VIDEO_FIELDS.map((k) => textOf(row?.[k]).toLowerCase())
+const isListed = (row) => statusesOf(row).every((v) => v === '' || v === 'not set')
+const isRecorder = (row) => statusesOf(row).every((v) => v === 'record')
+const isEditingDone = (row) => statusesOf(row).some((v) => ['editing done', 'edited', 'edit done'].includes(v) || v.includes('editing done'))
 const isRunning = (row) => !isListed(row) && !isRecorder(row) && statusesOf(row).some(Boolean)
 
-const isCountQuestion = (q) =>
-  /how many|how much|count|total|number|কত|কয়|কয়|কয়টি|কয়টি|কয়টা|কয়টা|সংখ্যা|মোট/.test(normalize(q))
-
-const isListQuestion = (q) =>
-  /show|list|which|what|give|name|names|বল|নাম|দেখাও|লিস্ট|তালিকা|কি কি|কী কী|কোন কোন|কোনগুলো|কোন গুলো|কারা|কোনটা|কোনটি/.test(normalize(q))
-
-const isFollowup = (q) => {
-  const l = normalize(q)
-  return /^(নাম|নামগুলো|নাম বল|নাম বলো|নাম দাও|কি কি|কী কী|কী কি|কোনগুলো|কোন গুলো|কোন কোন|কোনটা|কোনটি|which|which ones|list|list them|show|show me|give me the list|details|বিস্তারিত|আর কি|আর কী|আরও|আরও বল|এগুলো|ওগুলো|এগুলোর নাম|ওগুলোর নাম|তার নাম|তাদের নাম)(\s*(বল|দাও|দেখাও))?$/.test(l)
-}
+const isCountQuestion = (q) => /how many|how much|count|total|number|কত|কয়|কয়|কয়টি|কয়টি|কয়টা|কয়টা|সংখ্যা|মোট/.test(normalize(q))
+const isListQuestion = (q) => /show|list|which|what|give|name|names|বল|নাম|দেখাও|লিস্ট|তালিকা|কি কি|কী কী|কোন কোন|কোনগুলো|কোন গুলো|কারা|কোনটা|কোনটি/.test(normalize(q))
+const isFollowup = (q) => /^(নাম|নামগুলো|নাম বল|নাম বলো|নাম দাও|কি কি|কী কী|কী কি|কোনগুলো|কোন গুলো|কোন কোন|কোনটা|কোনটি|which|which ones|list|list them|show|show me|give me the list|details|বিস্তারিত|আর কি|আর কী|আরও|আরও বল|এগুলো|ওগুলো|এগুলোর নাম|ওগুলোর নাম|তার নাম|তাদের নাম)(\s*(বল|দাও|দেখাও))?$/i.test(normalize(q))
 
 const extractChannel = (q) => {
-  const l = normalize(q)
-  const match = l.match(/(?:^|\s)(hhd|bhd|dhd)(?:$|\s)/i)
-  return match ? match[1].toUpperCase() : null
+  const m = normalize(q).match(/(?:^|\s)(hhd|bhd|dhd)(?:$|\s)/i)
+  return m ? m[1].toUpperCase() : null
 }
 
 const extractStage = (q) => {
@@ -62,23 +39,6 @@ const extractStage = (q) => {
   return null
 }
 
-const getHistoryUsers = (history) =>
-  (Array.isArray(history) ? history : [])
-    .filter((item) => item?.role === 'user')
-    .map((item) => textOf(item.text))
-    .filter(Boolean)
-
-const previousMeaningfulQuestion = (history) => {
-  const users = getHistoryUsers(history)
-  for (let i = users.length - 1; i >= 0; i -= 1) {
-    if (!isFollowup(users[i])) return users[i]
-  }
-  return ''
-}
-
-const inheritedQuestion = (question, history) =>
-  isFollowup(question) ? previousMeaningfulQuestion(history) : question
-
 const unwrapRows = (value) => {
   if (Array.isArray(value)) return value
   if (Array.isArray(value?.data)) return value.data
@@ -87,56 +47,88 @@ const unwrapRows = (value) => {
   return []
 }
 
-const dateValue = (value) => {
+const getUsers = (history) => (Array.isArray(history) ? history : []).filter((x) => x?.role === 'user').map((x) => textOf(x.text)).filter(Boolean)
+const previousQuestion = (history) => {
+  const users = getUsers(history)
+  for (let i = users.length - 1; i >= 0; i--) if (!isFollowup(users[i])) return users[i]
+  return ''
+}
+const effectiveQuestion = (q, history) => isFollowup(q) ? previousQuestion(history) : q
+
+function parseDate(value) {
   if (!value) return null
   const raw = textOf(value)
-  const parsed = new Date(raw.includes('T') ? raw : raw.replace(' ', 'T'))
-  return Number.isNaN(parsed.getTime()) ? null : parsed
+  const d = new Date(raw.includes('T') ? raw : raw.replace(' ', 'T'))
+  return Number.isNaN(d.getTime()) ? null : d
 }
 
-const dhakaDateKey = (value) => {
-  const d = dateValue(value)
+function dhakaDateKey(value) {
+  const d = parseDate(value)
   if (!d) return null
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(d)
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
 }
 
-const dhakaDateTime = (value) => {
-  const d = dateValue(value)
+function dhakaDateTime(value) {
+  const d = parseDate(value)
   if (!d) return textOf(value) || 'No date'
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric',
-    hour: 'numeric', minute: '2-digit', hour12: true,
-  }).format(d)
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }).format(d)
 }
 
-const todayDhaka = (offset = 0) => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date())
-  const year = Number(parts.find((p) => p.type === 'year')?.value)
-  const month = Number(parts.find((p) => p.type === 'month')?.value)
-  const day = Number(parts.find((p) => p.type === 'day')?.value)
-  return new Date(Date.UTC(year, month - 1, day + offset)).toISOString().slice(0, 10)
+function currentDhakaParts() {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
+  return {
+    year: Number(parts.find((p) => p.type === 'year')?.value),
+    month: Number(parts.find((p) => p.type === 'month')?.value),
+    day: Number(parts.find((p) => p.type === 'day')?.value),
+  }
+}
+
+function dateFilterFromQuestion(question) {
+  const q = normalize(question)
+  const now = currentDhakaParts()
+  if (/\btoday\b|আজ|আজকে/.test(q)) return { key: new Date(Date.UTC(now.year, now.month - 1, now.day)).toISOString().slice(0, 10), label: 'Today' }
+  if (/\btomorrow\b|আগামীকাল/.test(q)) return { key: new Date(Date.UTC(now.year, now.month - 1, now.day + 1)).toISOString().slice(0, 10), label: 'Tomorrow' }
+
+  const monthMap = { jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12 }
+  const named = q.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:\s*,?\s*(\d{4}))?\b/i)
+  if (named) {
+    const month = monthMap[named[1].toLowerCase()]
+    const day = Number(named[2])
+    const year = Number(named[3] || now.year)
+    return { key: new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10), label: `${named[1]} ${day}` }
+  }
+
+  const numeric = q.match(/(?:^|\s)(\d{1,2})(?:st|nd|rd|th)?\s*(?:তারিখ|date)\b/)
+  if (numeric) {
+    const day = Number(numeric[1])
+    if (day >= 1 && day <= 31) return { key: new Date(Date.UTC(now.year, now.month - 1, day)).toISOString().slice(0, 10), label: `${day} ${new Intl.DateTimeFormat('en', { month: 'short' }).format(new Date(now.year, now.month - 1, day))}` }
+  }
+
+  const bare = q.match(/\b(?:on|for)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i)
+  if (bare) {
+    const day = Number(bare[1])
+    if (day >= 1 && day <= 31) return { key: new Date(Date.UTC(now.year, now.month - 1, day)).toISOString().slice(0, 10), label: `${day} ${new Intl.DateTimeFormat('en', { month: 'short' }).format(new Date(now.year, now.month - 1, day))}` }
+  }
+  return null
 }
 
 const questionHasVideo = (q) => /video|videos|content|ভিডিও|কনটেন্ট/.test(normalize(q))
+const questionHasUpload = (q) => /upload|uploaded|আপলোড/.test(normalize(q))
+const questionHasPost = (q) => /post|posted|পোস্ট/.test(normalize(q))
+const questionHasSchedule = (q) => /schedule|scheduled|calendar|শিডিউল|ক্যালেন্ডার|কবে|কখন|তারিখ|সময়|সময়/.test(normalize(q))
 
-const answerVideos = (question, history, contents) => {
+function answerVideos(question, history, contents) {
   const original = textOf(question)
-  const effective = inheritedQuestion(original, history)
+  const effective = effectiveQuestion(original, history)
   const q = normalize(original)
   const source = normalize(effective)
   const follow = isFollowup(original)
-
   if (!questionHasVideo(q) && !follow && !extractChannel(q) && !extractStage(q)) return null
 
   const channel = extractChannel(q) || extractChannel(source)
   const stage = extractStage(q) || extractStage(source)
   let rows = contents.filter(Boolean)
-  if (channel) rows = rows.filter((row) => channelOf(row) === channel)
-
+  if (channel) rows = rows.filter((r) => channelOf(r) === channel)
   if (stage === 'editing') rows = rows.filter(isEditingDone)
   if (stage === 'recorder') rows = rows.filter(isRecorder)
   if (stage === 'running') rows = rows.filter(isRunning)
@@ -144,102 +136,88 @@ const answerVideos = (question, history, contents) => {
 
   const label = channel ? `${channel} ` : ''
   const stageLabel = stage === 'editing' ? 'Editing Done' : stage === 'recorder' ? 'Recorder' : stage === 'running' ? 'Running' : stage === 'listed' ? 'Listed' : 'Total'
-
   if (isCountQuestion(q) && !isListQuestion(q)) return `${label}${stageLabel} Videos: ${rows.length}`
-
-  if (isListQuestion(q) || follow) {
-    return `${label}${stageLabel === 'Total' ? 'Content' : stageLabel} Videos: ${rows.length}\n\n${rows.length ? rows.map((row, i) => `${i + 1}. ${nameOf(row)}`).join('\n') : 'No matching videos found.'}`
-  }
+  if (isListQuestion(q) || follow) return `${label}${stageLabel === 'Total' ? 'Content' : stageLabel} Videos: ${rows.length}\n\n${rows.length ? rows.map((r, i) => `${i + 1}. ${nameOf(r)}`).join('\n') : 'No matching videos found.'}`
   return null
 }
 
-const answerSchedules = (question, history, posts) => {
+function answerPosts(question, history, posts) {
   const original = textOf(question)
+  const effective = effectiveQuestion(original, history)
   const q = normalize(original)
-  const effective = inheritedQuestion(original, history)
   const source = normalize(effective)
-  const scheduleIntent =
-    /schedule|scheduled|calendar|শিডিউল|ক্যালেন্ডার|কবে|কখন|তারিখ|সময়|সময়|today|tomorrow|আজ|আজকে|আগামীকাল/.test(q) ||
-    /schedule|scheduled|calendar|শিডিউল|ক্যালেন্ডার|কবে|কখন|তারিখ|সময়|সময়/.test(source)
-
-  if (!scheduleIntent) return null
-
-  const channel = extractChannel(q) || extractChannel(source)
-  let rows = posts.filter((post) => textOf(post?.status).toLowerCase() === 'scheduled' && post?.scheduled_at)
-  if (channel) rows = rows.filter((post) => channelOf(post) === channel)
-
-  const today = /\btoday\b|আজ|আজকে/.test(q)
-  const tomorrow = /\btomorrow\b|আগামীকাল/.test(q)
-  if (today || tomorrow) {
-    const key = todayDhaka(tomorrow ? 1 : 0)
-    rows = rows.filter((post) => dhakaDateKey(post.scheduled_at) === key)
-  }
-
-  const label = channel ? `${channel} ` : ''
-  const dayLabel = tomorrow ? 'Tomorrow ' : today ? 'Today ' : ''
-  return `${label}${dayLabel}Scheduled Posts: ${rows.length}\n\n${rows.length ? rows.map((post, i) => `${i + 1}. ${nameOf(post)}${post.channel ? ` [${post.channel}]` : ''} — ${dhakaDateTime(post.scheduled_at)}${post.content_type ? ` — ${post.content_type}` : ''}${post.platform ? ` — ${post.platform}` : ''}`).join('\n') : 'No scheduled posts found.'}`
-}
-
-const answerPosts = (question, history, posts) => {
-  const original = textOf(question)
-  const q = normalize(original)
-  const effective = inheritedQuestion(original, history)
-  const source = normalize(effective)
-  const postIntent = /post|posted|upload|uploaded|link|পোস্ট|আপলোড|লিংক|স্ট্যাটাস|status/.test(q) || /post|posted|upload|uploaded|পোস্ট|আপলোড|স্ট্যাটাস|status/.test(source)
-  if (!postIntent) return null
+  const follow = isFollowup(original)
+  const uploadIntent = questionHasUpload(q) || questionHasUpload(source)
+  const postIntent = questionHasPost(q) || questionHasPost(source)
+  if (!uploadIntent && !postIntent) return null
 
   const channel = extractChannel(q) || extractChannel(source)
   let rows = posts.filter(Boolean)
-  if (channel) rows = rows.filter((post) => channelOf(post) === channel)
+  if (channel) rows = rows.filter((r) => channelOf(r) === channel)
 
-  if (/uploaded|upload|আপলোড/.test(q)) rows = rows.filter((post) => /uploaded|upload/.test(textOf(post.status).toLowerCase()))
-  else if (/posted|post|পোস্ট/.test(q) && !/status|স্ট্যাটাস/.test(q)) rows = rows.filter((post) => /posted|post/.test(textOf(post.status).toLowerCase()))
+  if (uploadIntent) rows = rows.filter((r) => statusOf(r).includes('upload'))
+  else if (postIntent) rows = rows.filter((r) => statusOf(r).includes('post') || statusOf(r).includes('publish'))
+
+  const dateFilter = dateFilterFromQuestion(original) || (follow ? dateFilterFromQuestion(effective) : null)
+  if (dateFilter) rows = rows.filter((r) => dhakaDateKey(r.scheduled_at) === dateFilter.key)
 
   const label = channel ? `${channel} ` : ''
-  if (isCountQuestion(q) && !isListQuestion(q)) return `${label}Posts: ${rows.length}`
+  const statusLabel = uploadIntent ? 'Uploaded' : 'Posted'
+  if (isCountQuestion(q) && !isListQuestion(q)) return `${label}${dateFilter ? dateFilter.label + ' ' : ''}${statusLabel} Videos: ${rows.length}`
 
-  return `${label}Posts: ${rows.length}\n\n${rows.length ? rows.slice(0, 200).map((post, i) => `${i + 1}. ${nameOf(post)}${post.channel ? ` [${post.channel}]` : ''} — ${post.status || 'Not set'}${post.content_type ? ` — ${post.content_type}` : ''}`).join('\n') : 'No matching posts found.'}`
+  return `${label}${dateFilter ? dateFilter.label + ' ' : ''}${statusLabel} Videos: ${rows.length}\n\n${rows.length ? rows.slice(0, 200).map((r, i) => `${i + 1}. ${nameOf(r)}${r.channel ? ` [${r.channel}]` : ''}${r.content_type ? ` — ${r.content_type}` : ''}${r.scheduled_at ? ` — ${dhakaDateTime(r.scheduled_at)}` : ''}`).join('\n') : 'No matching videos found.'}`
 }
 
-const answerByName = (question, contents, posts) => {
+function answerSchedules(question, history, posts) {
+  const original = textOf(question)
+  const effective = effectiveQuestion(original, history)
+  const q = normalize(original)
+  const source = normalize(effective)
+  if (!questionHasSchedule(q) && !questionHasSchedule(source)) return null
+  if (questionHasUpload(q) || questionHasPost(q)) return null
+
+  const channel = extractChannel(q) || extractChannel(source)
+  let rows = posts.filter((p) => statusOf(p) === 'scheduled' && p?.scheduled_at)
+  if (channel) rows = rows.filter((p) => channelOf(p) === channel)
+  const dateFilter = dateFilterFromQuestion(original) || (isFollowup(original) ? dateFilterFromQuestion(effective) : null)
+  if (dateFilter) rows = rows.filter((p) => dhakaDateKey(p.scheduled_at) === dateFilter.key)
+
+  const label = channel ? `${channel} ` : ''
+  const dateLabel = dateFilter ? `${dateFilter.label} ` : ''
+  return `${label}${dateLabel}Scheduled Posts: ${rows.length}\n\n${rows.length ? rows.map((p, i) => `${i + 1}. ${nameOf(p)}${p.channel ? ` [${p.channel}]` : ''} — ${dhakaDateTime(p.scheduled_at)}${p.content_type ? ` — ${p.content_type}` : ''}${p.platform ? ` — ${p.platform}` : ''}`).join('\n') : 'No scheduled posts found.'}`
+}
+
+function answerByName(question, contents, posts) {
   const q = normalize(question)
-  const candidates = [...contents, ...posts]
-  const idMatch = q.match(/\b(hhd|bhd|dhd)\s*\d{2,}\b/i)
-  if (!idMatch) return null
-  const key = idMatch[0].replace(/\s+/g, '').toUpperCase()
-  const found = candidates.filter((row) => normalize(nameOf(row)).replace(/\s+/g, '') === key)
-  if (!found.length) return `No data found for ${key}.`
-
-  return found.map((row) => {
-    if (contents.includes(row)) {
-      return `${nameOf(row)} [${channelOf(row) || 'No channel'}]\nStage: ${isEditingDone(row) ? 'Editing Done' : stageOf(row)}\nFull Video: ${textOf(row.full_video_status) || 'Not set'}\nShort Ex: ${textOf(row.short_ex_status) || 'Not set'}\nShort Top: ${textOf(row.short_top_status) || 'Not set'}\nStyle Ex: ${textOf(row.style_ex_status) || 'Not set'}\nStyle Top: ${textOf(row.style_top_status) || 'Not set'}`
-    }
-    return `${nameOf(row)} [${channelOf(row) || 'No channel'}]\nStatus: ${textOf(row.status) || 'Not set'}\nScheduled: ${row.scheduled_at ? dhakaDateTime(row.scheduled_at) : 'Not scheduled'}\nContent Type: ${textOf(row.content_type) || 'Not set'}\nPlatform: ${textOf(row.platform) || 'Not set'}`
-  }).join('\n\n')
+  const id = q.match(/\b(hhd|bhd|dhd)\s*\d{2,}\b/i)
+  if (!id) return null
+  const key = id[0].replace(/\s+/g, '').toUpperCase()
+  const foundContents = contents.filter((r) => normalize(nameOf(r)).replace(/\s+/g, '') === key)
+  const foundPosts = posts.filter((r) => normalize(nameOf(r)).replace(/\s+/g, '') === key)
+  if (!foundContents.length && !foundPosts.length) return `No data found for ${key}.`
+  const out = []
+  foundContents.forEach((r) => out.push(`${nameOf(r)} [${channelOf(r) || 'No channel'}]\nStage: ${isEditingDone(r) ? 'Editing Done' : isRecorder(r) ? 'Recorder' : isListed(r) ? 'Listed' : 'Running'}\nFull Video: ${textOf(r.full_video_status) || 'Not set'}\nShort Ex: ${textOf(r.short_ex_status) || 'Not set'}\nShort Top: ${textOf(r.short_top_status) || 'Not set'}\nStyle Ex: ${textOf(r.style_ex_status) || 'Not set'}\nStyle Top: ${textOf(r.style_top_status) || 'Not set'}`))
+  foundPosts.forEach((r) => out.push(`${nameOf(r)} [${channelOf(r) || 'No channel'}]\nStatus: ${textOf(r.status) || 'Not set'}\nScheduled: ${r.scheduled_at ? dhakaDateTime(r.scheduled_at) : 'Not scheduled'}\nContent Type: ${textOf(r.content_type) || 'Not set'}\nPlatform: ${textOf(r.platform) || 'Not set'}`))
+  return out.join('\n\n')
 }
 
-const stageOf = (row) => {
-  if (isListed(row)) return 'Listed'
-  if (isRecorder(row)) return 'Recorder'
-  return 'Running'
-}
-
-const answerSummary = (question, contents, posts) => {
-  const q = normalize(question)
-  if (!/(summary|overview|dashboard|সব|all data|সামগ্রিক|সারাংশ|ড্যাশবোর্ড)/.test(q)) return null
-  const channels = ['HHD', 'BHD', 'DHD'].map((channel) => {
-    const rows = contents.filter((row) => channelOf(row) === channel)
-    return `${channel}: ${rows.length} total, ${rows.filter(isListed).length} listed, ${rows.filter(isRecorder).length} recorder, ${rows.filter(isRunning).length} running, ${rows.filter(isEditingDone).length} editing done`
+function answerSummary(question, contents, posts) {
+  if (!/(summary|overview|dashboard|সব|all data|সামগ্রিক|সারাংশ|ড্যাশবোর্ড)/.test(normalize(question))) return null
+  const channels = ['HHD', 'BHD', 'DHD'].map((c) => {
+    const rows = contents.filter((r) => channelOf(r) === c)
+    return `${c}: ${rows.length} total, ${rows.filter(isListed).length} listed, ${rows.filter(isRecorder).length} recorder, ${rows.filter(isRunning).length} running, ${rows.filter(isEditingDone).length} editing done`
   })
   return `Content Summary\n\n${channels.join('\n')}\n\nTotal content: ${contents.length}\nTotal posts: ${posts.length}`
 }
 
-const buildLocalAnswer = (question, history, contents, posts) =>
-  answerByName(question, contents, posts) ||
-  answerSchedules(question, history, posts) ||
-  answerVideos(question, history, contents) ||
-  answerPosts(question, history, posts) ||
-  answerSummary(question, contents, posts)
+function buildAnswer(question, history, contents, posts) {
+  // Order matters: date + uploaded/posted must never be mistaken for a schedule query.
+  return answerByName(question, contents, posts) ||
+    answerPosts(question, history, posts) ||
+    answerSchedules(question, history, posts) ||
+    answerVideos(question, history, contents) ||
+    answerSummary(question, contents, posts)
+}
 
 export default function Chatbot() {
   const [open, setOpen] = useState(false)
@@ -253,67 +231,48 @@ export default function Chatbot() {
   const ask = async (value) => {
     const question = textOf(value)
     if (!question || loading) return
-
     const history = messages.slice(-20)
     setMessage('')
     setMessages((current) => [...current, { role: 'user', text: question }])
     setLoading(true)
-
     try {
-      // Always read the same live endpoints used by the app before answering.
-      // This prevents stale/incorrect chatbot context from overriding real DB data.
       const [contentsResult, postsResult] = await Promise.all([api.get('/contents'), api.get('/posts')])
       const contents = unwrapRows(contentsResult?.data)
       const posts = unwrapRows(postsResult?.data)
-      const localAnswer = buildLocalAnswer(question, history, contents, posts)
+      const localAnswer = buildAnswer(question, history, contents, posts)
 
+      const recognized = questionHasVideo(question) || questionHasUpload(question) || questionHasPost(question) || questionHasSchedule(question) || extractChannel(question) || extractStage(question) || isFollowup(question) || /কত|কয়|কয়|মোট|total|count|how many|name|নাম/.test(normalize(question))
       let serverAnswer = ''
-      try {
-        const response = await api.post('/chat', { message: question, history })
-        serverAnswer = response?.data?.answer || response?.data?.message || ''
-      } catch {
-        // Deterministic live-data answer is the fallback for server errors.
+      if (!localAnswer && !recognized) {
+        try {
+          const response = await api.post('/chat', { message: question, history })
+          serverAnswer = response?.data?.answer || response?.data?.message || ''
+        } catch {}
       }
-
-      const dataIntent = questionHasVideo(question) || extractChannel(question) || extractStage(question) || /schedule|scheduled|calendar|শিডিউল|ক্যালেন্ডার|কবে|কখন|তারিখ|সময়|সময়|today|tomorrow|আজ|আজকে|আগামীকাল|post|posted|upload|uploaded|পোস্ট|আপলোড|status|স্ট্যাটাস/.test(normalize(question)) || isFollowup(question)
-      const answer = localAnswer || (dataIntent ? '' : serverAnswer) || 'এই প্রশ্নের জন্য live data থেকে কোনো উত্তর পাওয়া যায়নি।'
-
+      const answer = localAnswer || serverAnswer || 'এই প্রশ্নের জন্য live data থেকে কোনো উত্তর পাওয়া যায়নি।'
       setMessages((current) => [...current, { role: 'assistant', text: String(answer) }])
     } catch (error) {
       setMessages((current) => [...current, { role: 'assistant', text: `Live data load failed: ${error?.message || 'Unknown error'}` }])
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
-  const submit = (event) => { event.preventDefault(); ask(message) }
+  const submit = (e) => { e.preventDefault(); ask(message) }
+  if (!open) return <button onClick={() => setOpen(true)} aria-label="Open App Assistant" title="Open App Assistant" style={{ position: 'fixed', right: 24, bottom: 24, width: 58, height: 58, border: 0, borderRadius: '50%', background: '#6c5ce7', color: '#fff', cursor: 'pointer', boxShadow: '0 10px 30px rgba(0,0,0,.18)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}><span style={{ fontSize: 24, lineHeight: 1 }}>💬</span></button>
 
-  if (!open) return (
-    <button onClick={() => setOpen(true)} aria-label="Open App Assistant" title="Open App Assistant" style={{ position: 'fixed', right: 24, bottom: 24, width: 58, height: 58, border: 0, borderRadius: '50%', background: '#6c5ce7', color: '#fff', cursor: 'pointer', boxShadow: '0 10px 30px rgba(0,0,0,.18)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
-      <span style={{ fontSize: 24, lineHeight: 1 }} aria-hidden="true">💬</span>
-    </button>
-  )
-
-  return (
-    <div style={{ position: 'fixed', right: 24, bottom: 24, width: 360, maxWidth: 'calc(100vw - 32px)', height: 560, maxHeight: 'calc(100vh - 48px)', background: '#fff', borderRadius: 18, boxShadow: '0 18px 60px rgba(0,0,0,.22)', overflow: 'hidden', zIndex: 1000, display: 'flex', flexDirection: 'column', border: '1px solid #e8e8ef' }}>
-      <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #eee' }}>
-        <div><div style={{ fontWeight: 800 }}>App Assistant</div><div style={{ fontSize: 12, color: '#777' }}>Live app data • Follow-up aware</div></div>
-        <button onClick={() => setOpen(false)} style={{ border: 0, background: 'transparent', fontSize: 22, cursor: 'pointer', color: '#777' }}>×</button>
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: 14, background: '#fafafe' }}>
-        {messages.map((item, index) => (
-          <div key={index} style={{ display: 'flex', justifyContent: item.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
-            <div style={{ maxWidth: '92%', whiteSpace: 'pre-wrap', lineHeight: 1.5, padding: '10px 12px', borderRadius: 12, background: item.role === 'user' ? '#6c5ce7' : '#fff', color: item.role === 'user' ? '#fff' : '#20202a', border: item.role === 'assistant' ? '1px solid #eee' : 'none', fontSize: 13 }}>{item.text}</div>
-          </div>
-        ))}
-        {messages.length === 1 && !loading && <div style={{ marginTop: 10 }}>{starterQuestions.map((item, index) => <button key={index} onClick={() => ask(item)} style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 7, padding: '9px 10px', border: '1px solid #e5e2ff', borderRadius: 10, background: '#fff', color: '#4f46b8', cursor: 'pointer', fontSize: 12 }}>{item}</button>)}</div>}
-        {loading && <div style={{ fontSize: 12, color: '#777' }}>Live data checking…</div>}
-        <div ref={endRef} />
-      </div>
-      <form onSubmit={submit} style={{ display: 'flex', gap: 8, padding: 10, borderTop: '1px solid #eee', background: '#fff' }}>
-        <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask about videos, posts, schedule, status..." disabled={loading} style={{ flex: 1, minWidth: 0, border: '1px solid #ddd', borderRadius: 10, padding: '10px 11px', outline: 'none' }} />
-        <button type="submit" disabled={loading || !message.trim()} style={{ width: 42, border: 0, borderRadius: 10, background: '#6c5ce7', color: '#fff', cursor: 'pointer', fontSize: 18 }}>➤</button>
-      </form>
+  return <div style={{ position: 'fixed', right: 24, bottom: 24, width: 360, maxWidth: 'calc(100vw - 32px)', height: 560, maxHeight: 'calc(100vh - 48px)', background: '#fff', borderRadius: 18, boxShadow: '0 18px 60px rgba(0,0,0,.22)', overflow: 'hidden', zIndex: 1000, display: 'flex', flexDirection: 'column', border: '1px solid #e8e8ef' }}>
+    <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #eee' }}>
+      <div><div style={{ fontWeight: 800 }}>App Assistant</div><div style={{ fontSize: 12, color: '#777' }}>Live app data • Follow-up aware</div></div>
+      <button onClick={() => setOpen(false)} style={{ border: 0, background: 'transparent', fontSize: 22, cursor: 'pointer', color: '#777' }}>×</button>
     </div>
-  )
+    <div style={{ flex: 1, overflowY: 'auto', padding: 14, background: '#fafafe' }}>
+      {messages.map((item, index) => <div key={index} style={{ display: 'flex', justifyContent: item.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}><div style={{ maxWidth: '92%', whiteSpace: 'pre-wrap', lineHeight: 1.5, padding: '10px 12px', borderRadius: 12, background: item.role === 'user' ? '#6c5ce7' : '#fff', color: item.role === 'user' ? '#fff' : '#20202a', border: item.role === 'assistant' ? '1px solid #eee' : 'none', fontSize: 13 }}>{item.text}</div></div>)}
+      {messages.length === 1 && !loading && <div style={{ marginTop: 10 }}>{starterQuestions.map((item, index) => <button key={index} onClick={() => ask(item)} style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 7, padding: '9px 10px', border: '1px solid #e5e2ff', borderRadius: 10, background: '#fff', color: '#4f46b8', cursor: 'pointer', fontSize: 12 }}>{item}</button>)}</div>}
+      {loading && <div style={{ fontSize: 12, color: '#777' }}>Live data checking…</div>}
+      <div ref={endRef} />
+    </div>
+    <form onSubmit={submit} style={{ display: 'flex', gap: 8, padding: 10, borderTop: '1px solid #eee', background: '#fff' }}>
+      <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ask about videos, posts, schedule, status..." disabled={loading} style={{ flex: 1, minWidth: 0, border: '1px solid #ddd', borderRadius: 10, padding: '10px 11px', outline: 'none' }} />
+      <button type="submit" disabled={loading || !message.trim()} style={{ width: 42, border: 0, borderRadius: 10, background: '#6c5ce7', color: '#fff', cursor: 'pointer', fontSize: 18 }}>➤</button>
+    </form>
+  </div>
 }
