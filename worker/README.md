@@ -52,3 +52,7 @@ Redeploy the frontend after saving the variable.
 ## API compatibility
 
 The Worker implements the current frontend API routes for posts, bulk scheduling, project suggestions, dashboard summary, due-soon, overdue checks, templates, notes, settings, users and invites.
+
+## App Assistant
+
+The Worker also exposes `POST /api/chat`. The assistant reads the complete live D1 database snapshot (all non-system tables, schemas, counts and rows), sanitizes secrets, and uses the AI model to answer app-data questions with the live database as the source of truth.
