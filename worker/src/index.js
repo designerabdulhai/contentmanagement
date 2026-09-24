@@ -9,7 +9,7 @@
  * - Google Sheets sync is kept in this same file so there is no module import.
  */
 
-const WORKER_VERSION = '2026-08-25-esm-stable-v7';
+const WORKER_VERSION = '2026-09-24-fast-post-list-v1';
 const GOOGLE_SHEETS_SYNC_VERSION = '2026-08-25-v4';
 
 const CORS = {
@@ -440,7 +440,36 @@ async function handle(request, env) {
   }
 
   // POSTS - LIST
+  // Keep the list endpoint intentionally lean. The UI already gets the post
+  // fields from the posts table, so the owner JOIN is unnecessary for the
+  // dashboard/list/calendar first paint. Request ?full=1 only when owner
+  // information is explicitly needed.
   if (method === 'GET' && path === '/api/posts') {
+    const wantFull = url.searchParams.get('full') === '1';
+    if (!wantFull) {
+      const result = await db
+        .prepare(`
+          SELECT
+            id,
+            project_name,
+            content_type,
+            channel,
+            platform,
+            status,
+            scheduled_at,
+            uploaded_link,
+            notes,
+            created_by,
+            recurring_rule,
+            is_overdue
+          FROM posts
+          ORDER BY scheduled_at IS NULL, scheduled_at, id
+      `)
+        .all();
+
+      return json(result.results || []);
+    }
+
     const result = await db
       .prepare(`
         SELECT
@@ -449,9 +478,7 @@ async function handle(request, env) {
         FROM posts p
         LEFT JOIN users u
           ON p.created_by = u.id
-        ORDER BY
-          p.scheduled_at IS NULL,
-          p.scheduled_at
+        ORDER BY p.scheduled_at IS NULL, p.scheduled_at, p.id
       `)
       .all();
 
