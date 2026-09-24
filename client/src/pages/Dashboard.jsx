@@ -96,7 +96,15 @@ function BarChart({title,entries,colors=PALETTE}){ const [hovered,setHovered]=us
 
 export default function Dashboard(){
  const [summary,setSummary]=useState({}); const [posts,setPosts]=useState([]); const [dueSoon,setDueSoon]=useState([]); const [search,setSearch]=useState(''); const [searchOpen,setSearchOpen]=useState(false);
- const loadDashboard=()=>{ api.get('/summary').then(r=>setSummary(r.data||{})).catch(()=>{}); api.get('/posts').then(r=>setPosts(Array.isArray(r.data)?r.data:[])).catch(()=>setPosts([])); api.get('/dashboard/due-soon').then(r=>setDueSoon(Array.isArray(r.data)?r.data.slice(0,5):[])).catch(()=>setDueSoon([])); };
+ const loadDashboard=()=>{
+   // One batched endpoint is faster than waiting for 3 independent API round-trips.
+   api.get('/summary?include=dashboard').then(r=>setSummary(r.data||{})).catch(()=>{});
+   api.get('/dashboard/feed?limit=200').then(r=>{
+     const data=r.data||{};
+     setPosts(Array.isArray(data.posts)?data.posts:[]);
+     setDueSoon(Array.isArray(data.dueSoon)?data.dueSoon.slice(0,5):[]);
+   }).catch(()=>{setPosts([]);setDueSoon([])});
+ };
  useEffect(()=>{loadDashboard()},[])
  useEffect(()=>{ const onKey=e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();setSearchOpen(true);setTimeout(()=>document.querySelector('#dashboard-universal-search')?.focus(),0)} if(e.key==='Escape')setSearchOpen(false)}; window.addEventListener('keydown',onKey); return()=>window.removeEventListener('keydown',onKey)},[])
  const channelCounts=useMemo(()=>buildCounts(posts,'channel'),[posts]); const typeCounts=useMemo(()=>buildCounts(posts,'content_type'),[posts]); const monthlyCounts=useMemo(()=>monthCounts(posts),[posts]); const weeklyTypes=useMemo(()=>weeklyTypeCounts(posts),[posts]);
