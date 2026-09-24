@@ -27,8 +27,10 @@ function toMessage(value) {
   if (value == null) return '';
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'object') {
-    if (typeof value.error === 'string') return value.error;
-    if (typeof value.message === 'string') return value.message;
+    // Prefer the detailed server message when the API also returns a generic
+    // error label such as "content request failed".
+    if (typeof value.message === 'string' && value.message.trim()) return value.message.trim();
+    if (typeof value.error === 'string') return value.error.trim();
     try { return JSON.stringify(value); } catch { return ''; }
   }
   return String(value);
