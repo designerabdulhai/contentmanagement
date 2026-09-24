@@ -1,13 +1,14 @@
 import axios from 'axios';
 
-// Keep browser requests same-origin in production. Vercel rewrites /api/*
-// to api/index.js, which forwards the request to the Cloudflare Worker.
-const baseURL = '/api';
+// Production requests go directly to the Cloudflare Worker. This removes the
+// extra Vercel serverless-proxy hop that was making the first data request
+// noticeably slow. The Worker already supports CORS for browser requests.
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://contentmanagement-api.rubel-bhd1.workers.dev/api';
 const TOKEN_KEY = 'content_schedule_auth_token';
 
 const api = axios.create({
   baseURL,
-  timeout: 15000,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
