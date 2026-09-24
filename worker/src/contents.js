@@ -114,10 +114,16 @@ async function readBody(request) {
 // optional owner relationship is not available. A simple SELECT keeps the
 // list endpoint compatible with the real production D1 schema.
 async function listContents(db) {
+  // Read the actual D1 schema so older databases remain readable while the
+  // migration is being rolled out.
+  const columns = await contentColumns(db);
+  const hasCreatedAt = columns.has('created_at');
+  const orderBy = hasCreatedAt ? 'created_at DESC, id DESC' : 'id DESC';
+
   const result = await db.prepare(`
     SELECT *
     FROM contents
-    ORDER BY created_at DESC, id DESC
+    ORDER BY ${orderBy}
   `).all();
 
   return json(result.results || []);
