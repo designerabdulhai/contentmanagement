@@ -819,9 +819,43 @@ async function handle(request, env) {
       `),
     ]);
 
+    const now = new Date();
+    const year = now.getUTCFullYear();
+    const monthIndex = now.getUTCMonth();
+    const month = String(monthIndex + 1).padStart(2, '0');
+    const monthStart = `${year}-${month}-01`;
+    const nextMonthStart = new Date(Date.UTC(year, monthIndex + 1, 1)).toISOString().slice(0, 10);
+
+    const [totalResult, scheduledMonthResult, uploadedMonthResult, listedMonthResult] = await db.batch([
+      db.prepare('SELECT COUNT(*) AS c FROM posts'),
+      db.prepare(`
+        SELECT COUNT(*) AS c
+        FROM posts
+        WHERE scheduled_at >= ? AND scheduled_at < ?
+      `).bind(monthStart, nextMonthStart),
+      db.prepare(`
+        SELECT COUNT(*) AS c
+        FROM posts
+        WHERE status = 'Uploaded'
+          AND created_at >= ? AND created_at < ?
+      `).bind(monthStart, nextMonthStart),
+      db.prepare(`
+        SELECT COUNT(*) AS c
+        FROM posts
+        WHERE status = 'Listed'
+          AND created_at >= ? AND created_at < ?
+      `).bind(monthStart, nextMonthStart),
+    ]);
+
     return json({
       posts: postsResult.results || [],
       dueSoon: dueSoonResult.results || [],
+      summary: {
+        total: Number(totalResult.results?.[0]?.c || 0),
+        scheduledMonth: Number(scheduledMonthResult.results?.[0]?.c || 0),
+        uploadedMonth: Number(uploadedMonthResult.results?.[0]?.c || 0),
+        listedMonth: Number(listedMonthResult.results?.[0]?.c || 0),
+      },
     });
   }
 
