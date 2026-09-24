@@ -17,10 +17,9 @@ function emptyContent(){
 }
 
 function videoStatuses(item){return VIDEO_FIELDS.map(([key])=>String(item?.[`${key}_status`]||''))}
-// A Listed Video is a post where none of the five video statuses has been changed yet.
 function isListedVideo(item){const statuses=videoStatuses(item);return statuses.length>0&&statuses.every(status=>status==='')}
 function isRecorderVideo(item){const statuses=videoStatuses(item);return statuses.length>0&&statuses.every(status=>status==='Record')}
-function isRunningVideo(item){const statuses=videoStatuses(item);return !isListedVideo(item)&&!isRecorderVideo(item)&&statuses.some(status=>status!=='')}
+function isRunningVideo(item){return !isListedVideo(item)&&!isRecorderVideo(item)&&videoStatuses(item).some(status=>status!=='')}
 
 function stageOf(item){
   if (isListedVideo(item)) return 'ready'
@@ -42,7 +41,6 @@ function StatusSelect({value, options, onChange}){
 }
 
 function ChannelBadge({value}){return <span className={`content-channel-badge channel-${String(value || 'empty').toLowerCase()}`}>{value || 'Not set'}</span>}
-
 function StatusCell({item, field, status, onStatus}){return <div className="content-status-cell"><StatusSelect value={status} options={field === 'poster' ? POSTER_STATUSES : VIDEO_STATUSES} onChange={value=>onStatus(item, `${field}_status`, value)} /></div>}
 
 async function copyPath(path){
@@ -56,57 +54,48 @@ export default function Content(){
   useEffect(()=>{load()},[])
   const counts=useMemo(()=>items.reduce((acc,item)=>{acc[stageOf(item)]+=1;return acc},{ready:0,running:0,uploaded:0}),[items])
   const channelCounts=useMemo(()=>items.reduce((acc,item)=>{const ch=String(item.channel||'').toUpperCase();if(CHANNELS.includes(ch))acc[ch]+=1;return acc},{HHD:0,BHD:0,DHD:0}),[items])
-  const videoSummary=useMemo(()=>CHANNELS.reduce((acc,ch)=>{
-    const channelItems=items.filter(item=>String(item.channel||'').toUpperCase()===ch)
-    acc[ch]={listed:channelItems.filter(isListedVideo).length,recorder:channelItems.filter(isRecorderVideo).length,running:channelItems.filter(isRunningVideo).length}
-    return acc
-  },{}),[items])
-  const visible=useMemo(()=>{const q=search.trim().toLowerCase();return items.filter(item=>{
-    const itemChannel=String(item.channel||'').toUpperCase()
-    const matchesSummary=!summaryFilter||(
-      itemChannel===summaryFilter.channel &&
-      (summaryFilter.metric==='listed'?isListedVideo(item):summaryFilter.metric==='recorder'?isRecorderVideo(item):isRunningVideo(item))
-    )
-    const matchesTab=tab==='all'||stageOf(item)===tab
-    const matchesChannel=channelFilter==='all'||itemChannel===channelFilter
-    const matchesSearch=!q||[item.name,item.channel,item.document_link,item.file_path].some(v=>String(v||'').toLowerCase().includes(q))
-    return matchesSummary&&matchesTab&&matchesChannel&&matchesSearch
-  })},[items,tab,channelFilter,search,summaryFilter])
+  const videoSummary=useMemo(()=>CHANNELS.reduce((acc,ch)=>{const channelItems=items.filter(item=>String(item.channel||'').toUpperCase()===ch);acc[ch]={listed:channelItems.filter(isListedVideo).length,recorder:channelItems.filter(isRecorderVideo).length,running:channelItems.filter(isRunningVideo).length};return acc},{}),[items])
+  const visible=useMemo(()=>{const q=search.trim().toLowerCase();return items.filter(item=>{const itemChannel=String(item.channel||'').toUpperCase();const matchesSummary=!summaryFilter||(itemChannel===summaryFilter.channel&&(summaryFilter.metric==='listed'?isListedVideo(item):summaryFilter.metric==='recorder'?isRecorderVideo(item):isRunningVideo(item)));const matchesTab=tab==='all'||stageOf(item)===tab;const matchesChannel=channelFilter==='all'||itemChannel===channelFilter;const matchesSearch=!q||[item.name,item.channel,item.document_link,item.file_path].some(v=>String(v||'').toLowerCase().includes(q));return matchesSummary&&matchesTab&&matchesChannel&&matchesSearch})},[items,tab,channelFilter,search,summaryFilter])
   const selectSummary=(channel,metric)=>{setSummaryFilter(current=>current?.channel===channel&&current?.metric===metric?null:{channel,metric});setTab('all');setChannelFilter('all')}
   const save=async payload=>{setSaving(true);setError('');try{const r=editing?await api.put(`/contents/${editing.id}`,payload):await api.post('/contents',payload);setItems(current=>editing?current.map(item=>item.id===editing.id?r.data:item):[r.data,...current]);setShowModal(false);setEditing(null)}catch(e){setError(e.message||'Unable to save content')}finally{setSaving(false)}}
-  const updateStatus=async(item,field,value)=>{setError('');const next={...item,[field]:value};setItems(current=>current.map(row=>row.id===item.id?next:row));try{const r=await api.put(`/contents/${item.id}`,next);setItems(current=>current.map(row=>row.id===item.id?r.data:row))}catch(e){setItems(current=>current.map(row=>row.id===item.id?item:row));setError(e.message||'Unable to update status')}}
-  const updateEmergency=async(item,checked)=>{setError('');const next={...item,emergency:checked?1:0};setItems(current=>current.map(row=>row.id===item.id?next:row));try{const r=await api.put(`/contents/${item.id}`,next);setItems(current=>current.map(row=>row.id===item.id?r.data:row))}catch(e){setItems(current=>current.map(row=>row.id===item.id?item:row));setError(e.message||'Unable to update emergency status')}}
+
+  // Status changes send only the field being changed. This avoids rewriting
+  // unrelated content columns and makes inline status updates safe on older D1 rows.
+  const updateStatus=async(item,field,value)=>{
+    setError('')
+    const next={...item,[field]:value}
+    setItems(current=>current.map(row=>row.id===item.id?next:row))
+    try{
+      const r=await api.put(`/contents/${item.id}`,{[field]:value})
+      setItems(current=>current.map(row=>row.id===item.id?r.data:row))
+    }catch(e){
+      setItems(current=>current.map(row=>row.id===item.id?item:row))
+      setError(e.message||'Unable to update status')
+    }
+  }
+
+  const updateEmergency=async(item,checked)=>{
+    setError('')
+    const value=checked?1:0
+    const next={...item,emergency:value}
+    setItems(current=>current.map(row=>row.id===item.id?next:row))
+    try{
+      const r=await api.put(`/contents/${item.id}`,{emergency:value})
+      setItems(current=>current.map(row=>row.id===item.id?r.data:row))
+    }catch(e){
+      setItems(current=>current.map(row=>row.id===item.id?item:row))
+      setError(e.message||'Unable to update emergency status')
+    }
+  }
+
   const deleteContent=async item=>{if(!window.confirm(`Delete "${item.name}"?\n\nThis action cannot be undone.`))return;setError('');try{await api.delete(`/contents/${item.id}`);setItems(current=>current.filter(row=>row.id!==item.id));if(editing?.id===item.id){setEditing(null);setShowModal(false)}}catch(e){setError(e.message||'Unable to delete content')}}
 
   return <div className="page content-page">
     <div className="content-header"><div><h2>Content</h2><p>Manage video production from ready to uploaded.</p></div><button className="btn-primary" type="button" onClick={()=>{setEditing(null);setShowModal(true)}}>+ Add New Content</button></div>
     <div className="content-summary-grid">
-      {CHANNELS.filter(ch=>ch!=='DHD').map(ch=>{
-        const recorderCount=videoSummary[ch]?.recorder||0
-        const recordMessage=recorderCount<=2?'Need Video Record':''
-        return <div className={`content-summary-channel content-summary-${ch.toLowerCase()}`} key={ch}>
-          <div className="content-summary-title"><span>{ch}</span>{recordMessage&&<span className="content-summary-record-message">{recordMessage}</span>}</div>
-          <div className="content-summary-metrics">
-            {[
-              ['listed','Total Listed Video','listed'],
-              ['recorder','Total Recorder Video','recorder'],
-              ['running','Total Running Video','running']
-            ].map(([metric,label,dot])=><button key={metric} type="button" className={`content-summary-metric ${summaryFilter?.channel===ch&&summaryFilter?.metric===metric?'active':''}`} onClick={()=>selectSummary(ch,metric)} title={`Show ${label} for ${ch}`}><span className={`content-summary-dot ${dot}`}></span><div><span>{label}</span><strong>{videoSummary[ch]?.[metric]||0}</strong></div></button>)}
-          </div>
-        </div>
-      })}
+      {CHANNELS.filter(ch=>ch!=='DHD').map(ch=>{const recorderCount=videoSummary[ch]?.recorder||0;const recordMessage=recorderCount<=2?'Need Video Record':'';return <div className={`content-summary-channel content-summary-${ch.toLowerCase()}`} key={ch}><div className="content-summary-title"><span>{ch}</span>{recordMessage&&<span className="content-summary-record-message">{recordMessage}</span>}</div><div className="content-summary-metrics">{[['listed','Total Listed Video','listed'],['recorder','Total Recorder Video','recorder'],['running','Total Running Video','running']].map(([metric,label,dot])=><button key={metric} type="button" className={`content-summary-metric ${summaryFilter?.channel===ch&&summaryFilter?.metric===metric?'active':''}`} onClick={()=>selectSummary(ch,metric)} title={`Show ${label} for ${ch}`}><span className={`content-summary-dot ${dot}`}></span><div><span>{label}</span><strong>{videoSummary[ch]?.[metric]||0}</strong></div></button>)}</div></div>})}
     </div>
-    <div className="content-toolbar">
-      <input className="search content-search" placeholder="Search content" value={search} onChange={e=>setSearch(e.target.value)} />
-      <div className="content-filter-groups">
-        <div className="content-channel-tabs" role="tablist" aria-label="Channel filter">
-          {[['all','All Channels',items.length],...CHANNELS.map(ch=>[ch,ch,channelCounts[ch]])].map(([key,label,count])=><button key={key} className={channelFilter===key?'active':''} type="button" onClick={()=>{setChannelFilter(key);setSummaryFilter(null)}}>{label}<span>{count}</span></button>)}
-        </div>
-        <div className="content-tabs" role="tablist" aria-label="Status filter">
-          {[['all','All',items.length],['ready','Video Ready',counts.ready],['running','Running',counts.running],['uploaded','Uploaded',counts.uploaded]].map(([key,label,count])=><button key={key} className={tab===key?'active':''} type="button" onClick={()=>{setTab(key);setSummaryFilter(null)}}>{label}<span>{count}</span></button>)}
-        </div>
-      </div>
-    </div>
+    <div className="content-toolbar"><input className="search content-search" placeholder="Search content" value={search} onChange={e=>setSearch(e.target.value)} /><div className="content-filter-groups"><div className="content-channel-tabs" role="tablist" aria-label="Channel filter">{[['all','All Channels',items.length],...CHANNELS.map(ch=>[ch,ch,channelCounts[ch]])].map(([key,label,count])=><button key={key} className={channelFilter===key?'active':''} type="button" onClick={()=>{setChannelFilter(key);setSummaryFilter(null)}}>{label}<span>{count}</span></button>)}</div><div className="content-tabs" role="tablist" aria-label="Status filter">{[['all','All',items.length],['ready','Video Ready',counts.ready],['running','Running',counts.running],['uploaded','Uploaded',counts.uploaded]].map(([key,label,count])=><button key={key} className={tab===key?'active':''} type="button" onClick={()=>{setTab(key);setSummaryFilter(null)}}>{label}<span>{count}</span></button>)}</div></div></div>
     {error&&<div className="content-error">{error}</div>}
     <div className="table-wrap card content-table-wrap">{loading?<div className="content-empty">Loading content…</div>:visible.length===0?<div className="content-empty">No content found.</div>:<table className="content-table"><thead><tr><th>Name</th><th>Channel</th><th>Full Video</th><th>Short Ex</th><th>Short Top</th><th>Style Ex</th><th>Style Top</th><th>Poster</th><th aria-label="Emergency"></th><th>Actions</th></tr></thead><tbody>{visible.map(item=><tr key={item.id} className={rowClassOf(item)}><td className="content-name">{item.name}</td><td><ChannelBadge value={item.channel}/></td><td><StatusCell item={item} field="full_video" status={item.full_video_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="short_ex" status={item.short_ex_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="short_top" status={item.short_top_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="style_ex" status={item.style_ex_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="style_top" status={item.style_top_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="poster" status={item.poster_status} onStatus={updateStatus}/></td><td><label className="emergency-check" title="Emergency"><input type="checkbox" aria-label={`Emergency ${item.name}`} checked={Number(item.emergency)===1} onChange={e=>updateEmergency(item,e.target.checked)}/></label></td><td className="actions content-actions"><button type="button" title={item.document_link?'Open Document':'Document link not set'} disabled={!item.document_link} onClick={()=>item.document_link&&window.open(item.document_link,'_blank','noopener,noreferrer')}>↗</button><button type="button" title={item.file_path?'Copy Path':'File path not set'} disabled={!item.file_path} onClick={()=>copyPath(item.file_path)}>⧉</button><button type="button" title="Edit" onClick={()=>{setEditing(item);setShowModal(true)}}>✏️</button><button type="button" className="content-delete-button" title="Delete" onClick={()=>deleteContent(item)}>🗑️</button></td></tr>)}</tbody></table>}</div>
     {showModal&&<ContentModal initial={editing||emptyContent()} saving={saving} onCancel={()=>{setShowModal(false);setEditing(null)}} onSave={save}/>} 
