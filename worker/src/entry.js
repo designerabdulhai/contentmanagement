@@ -1,5 +1,6 @@
 import api from './index.js';
 import { handleChat } from './chat.js';
+import { handleContents } from './contents.js';
 
 const SCHEDULER_VERSION = '2026-09-05-auto-status-v4';
 const DHAKA_OFFSET_MINUTES = 6 * 60;
@@ -139,9 +140,20 @@ async function runScheduler(env) {
 export default {
   async fetch(request, env, ctx) {
     const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+
     if (pathname === '/api/chat' || pathname === '/chat') {
       return handleChat(request, env);
     }
+
+    if (
+      pathname === '/api/contents' ||
+      pathname === '/contents' ||
+      /^\/api\/contents\/\d+$/.test(pathname) ||
+      /^\/contents\/\d+$/.test(pathname)
+    ) {
+      return handleContents(request, env);
+    }
+
     return api.fetch(request, env, ctx);
   },
 
@@ -150,7 +162,6 @@ export default {
       `Cron started: ${event?.cron || 'unknown'} at ${event?.scheduledTime || Date.now()}`
     );
 
-    // Await the scheduler directly so Cron Events records the real outcome.
     await runScheduler(env);
   },
 };
