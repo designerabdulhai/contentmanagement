@@ -30,9 +30,10 @@ function getOptimisticUser(token){
     const encoded = String(token || '').split('.')[0];
     if (!encoded) return null;
     const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    const payload = JSON.parse(atob(normalized + '='.repeat((4 - normalized.length % 4) % 4)));
-    const id = Number(payload?.split?.('.')?.[0]);
-    const exp = Number(payload?.split?.('.')?.[1]);
+    const payload = atob(normalized + '='.repeat((4 - normalized.length % 4) % 4));
+    const [idText, expText] = payload.split('.');
+    const id = Number(idText);
+    const exp = Number(expText);
     if (!Number.isInteger(id) || !Number.isFinite(exp) || exp <= Math.floor(Date.now() / 1000)) return null;
     return { id };
   } catch {
