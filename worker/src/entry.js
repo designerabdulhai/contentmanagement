@@ -252,7 +252,9 @@ export default {
       }
     }
 
-    if (pathname === '/api/contents' || pathname === '/contents') {
+    // Keep the alternate Worker entry consistent with entry-safe.js.
+    // Inline Content status changes use PUT /api/contents/:id.
+    if (/^\/(?:api\/)?contents(?:\/\d+)?\/?$/.test(pathname)) {
       return handleContents(request, env);
     }
 
