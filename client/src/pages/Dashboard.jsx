@@ -97,12 +97,11 @@ function BarChart({title,entries,colors=PALETTE}){ const [hovered,setHovered]=us
 export default function Dashboard(){
  const [summary,setSummary]=useState({}); const [posts,setPosts]=useState([]); const [dueSoon,setDueSoon]=useState([]); const [search,setSearch]=useState(''); const [searchOpen,setSearchOpen]=useState(false);
  const loadDashboard=()=>{
-   // One batched endpoint is faster than waiting for 3 independent API round-trips.
-   api.get('/summary?include=dashboard').then(r=>setSummary(r.data||{})).catch(()=>{});
-   api.get('/dashboard/feed?limit=200').then(r=>{
+   api.get('/dashboard/feed?limit=500').then(r=>{
      const data=r.data||{};
      setPosts(Array.isArray(data.posts)?data.posts:[]);
      setDueSoon(Array.isArray(data.dueSoon)?data.dueSoon.slice(0,5):[]);
+     setSummary(data.summary||{});
    }).catch(()=>{setPosts([]);setDueSoon([])});
  };
  useEffect(()=>{loadDashboard()},[])
