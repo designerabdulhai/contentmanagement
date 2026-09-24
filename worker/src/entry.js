@@ -4,6 +4,7 @@ import { handleContents } from './contents.js';
 
 const SCHEDULER_VERSION = '2026-09-05-auto-status-v4';
 const DHAKA_OFFSET_MINUTES = 6 * 60;
+const ASSISTANT_VERSION = '2026-09-24-ai-assistant-v4';
 
 function isoDhakaNow() {
   const now = new Date(Date.now() + DHAKA_OFFSET_MINUTES * 60 * 1000);
@@ -141,8 +142,32 @@ export default {
   async fetch(request, env, ctx) {
     const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
 
+    // The assistant is handled before the legacy API router so /api/chat
+    // always reaches the D1-aware assistant module.
     if (pathname === '/api/chat' || pathname === '/chat') {
-      return handleChat(request, env);
+      try {
+        return await handleChat(request, env);
+      } catch (error) {
+        console.error('Assistant route failed:', error?.message || error);
+
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: 'assistant route failed',
+            message: error?.message || String(error),
+            assistant_version: ASSISTANT_VERSION,
+          }),
+          {
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST,OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            },
+          }
+        );
+      }
     }
 
     if (
