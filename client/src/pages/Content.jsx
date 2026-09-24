@@ -93,6 +93,14 @@ export default function Content(){
   const deleteContent=async item=>{if(!window.confirm(`Delete "${item.name}"?\n\nThis action cannot be undone.`))return;setError('');try{await api.delete(`/contents/${item.id}`);setItems(current=>current.filter(row=>row.id!==item.id));if(editing?.id===item.id){setEditing(null);setShowModal(false)}}catch(e){setError(e.message||'Unable to delete content')}}
 
   return <div className="page content-page">
+    <style>{`
+      .content-summary-title{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+      .content-summary-record-message{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:4px 12px;border-radius:999px;background:#fff1f2;border:2px solid #ef4444;color:#b91c1c;font-size:12px;font-weight:900;letter-spacing:.35px;box-shadow:0 3px 10px rgba(239,68,68,.18);animation:need-video-pulse 1.8s ease-in-out infinite}
+      .content-summary-record-message::before{content:'⚠';font-size:15px;line-height:1}
+      @keyframes need-video-pulse{0%,100%{box-shadow:0 3px 10px rgba(239,68,68,.18)}50%{box-shadow:0 0 0 5px rgba(239,68,68,.12),0 5px 14px rgba(239,68,68,.28)}}
+      html[data-theme='dark'] .content-summary-record-message{background:#3b1115;border-color:#f87171;color:#fecaca}
+      @media(max-width:640px){.content-summary-record-message{font-size:11px;padding:3px 9px}}
+    `}</style>
     <div className="content-header"><div><h2>Content</h2><p>Manage video production from ready to uploaded.</p></div><button className="btn-primary" type="button" onClick={()=>{setEditing(null);setShowModal(true)}}>+ Add New Content</button></div>
     <div className="content-summary-grid">
       {CHANNELS.filter(ch=>ch!=='DHD').map(ch=>{const recorderCount=videoSummary[ch]?.recorder||0;const recordMessage=recorderCount<=2?'Need Video Record':'';return <div className={`content-summary-channel content-summary-${ch.toLowerCase()}`} key={ch}><div className="content-summary-title"><span>{ch}</span>{recordMessage&&<span className="content-summary-record-message">{recordMessage}</span>}</div><div className="content-summary-metrics">{[['listed','Total Listed Video','listed'],['recorder','Total Recorder Video','recorder'],['running','Total Running Video','running']].map(([metric,label,dot])=><button key={metric} type="button" className={`content-summary-metric ${summaryFilter?.channel===ch&&summaryFilter?.metric===metric?'active':''}`} onClick={()=>selectSummary(ch,metric)} title={`Show ${label} for ${ch}`}><span className={`content-summary-dot ${dot}`}></span><div><span>{label}</span><strong>{videoSummary[ch]?.[metric]||0}</strong></div></button>)}</div></div>})}
