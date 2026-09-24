@@ -109,12 +109,15 @@ async function readBody(request) {
   }
 }
 
+// Do not JOIN users here. The Content screen only needs the contents rows,
+// and the existing D1 database can contain older contents schemas where the
+// optional owner relationship is not available. A simple SELECT keeps the
+// list endpoint compatible with the real production D1 schema.
 async function listContents(db) {
   const result = await db.prepare(`
-    SELECT c.*, u.display_name AS owner
-    FROM contents c
-    LEFT JOIN users u ON c.created_by = u.id
-    ORDER BY c.created_at DESC, c.id DESC
+    SELECT *
+    FROM contents
+    ORDER BY created_at DESC, id DESC
   `).all();
 
   return json(result.results || []);
