@@ -6,10 +6,13 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 };
 
-const CHAT_VERSION = '2026-09-24-ai-assistant-v3';
+const CHAT_VERSION = '2026-09-24-gemini-d1-assistant-v1';
 
 const json = (data, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: CORS });
+  new Response(JSON.stringify(data), {
+    status,
+    headers: CORS,
+  });
 
 const tokenFromRequest = (request) => {
   const header = String(request.headers.get('Authorization') || '');
@@ -17,8 +20,12 @@ const tokenFromRequest = (request) => {
 };
 
 function base64UrlDecode(value) {
-  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
-  return atob(normalized + '='.repeat((4 - (normalized.length % 4)) % 4));
+  const normalized = String(value || '')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  return atob(
+    normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+  );
 }
 
 async function sha256(value) {
@@ -92,7 +99,7 @@ function sanitize(value, key = '') {
       try {
         return sanitize(JSON.parse(trimmed));
       } catch {
-        // Keep ordinary string.
+        // Keep ordinary strings unchanged.
       }
     }
   }
@@ -127,7 +134,10 @@ async function loadCompleteDatabase(db) {
     });
 
     try {
-      const result = await db.prepare(`SELECT * FROM ${quoteIdent(name)}`).all();
+      const result = await db
+        .prepare(`SELECT * FROM ${quoteIdent(name)}`)
+        .all();
+
       tables[name] = (result.results || []).map((row) => sanitize(row));
     } catch (error) {
       tables[name] = [];
@@ -150,7 +160,7 @@ function normalizeText(value) {
     .toLowerCase()
     .normalize('NFKC')
     .replace(/[“”‘’]/g, "'")
-    .replace(/[।,!?;:()[\]{}"'\`]/g, ' ')
+    .replace(/[।,!?;:()[\]{}"'`]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -165,49 +175,114 @@ function detectIntent(question) {
 
   return {
     count: includesAny(q, [
-      'কয়টা','কতটি','কতগুলো','কত','how many','count','total','number of','কয়টি'
+      'কয়টা',
+      'কতটি',
+      'কতগুলো',
+      'কত',
+      'how many',
+      'count',
+      'total',
+      'number of',
+      'কয়টি',
     ]),
     list: includesAny(q, [
-      'নাম','নামগুলো','list','show','দাও','দেখাও','কে কে','which','what are','কোনগুলো'
+      'নাম',
+      'নামগুলো',
+      'list',
+      'show',
+      'দাও',
+      'দেখাও',
+      'কে কে',
+      'which',
+      'what are',
+      'কোনগুলো',
     ]),
     schedule: includesAny(q, [
-      'schedule','scheduled','শিডিউল','শিডিউল করা','ক্যালেন্ডার','calendar','কবে','কখন','সময়','time'
+      'schedule',
+      'scheduled',
+      'শিডিউল',
+      'শিডিউল করা',
+      'ক্যালেন্ডার',
+      'calendar',
+      'কবে',
+      'কখন',
+      'সময়',
+      'time',
     ]),
     upload: includesAny(q, [
-      'upload','uploaded','আপলোড','আপলোড হয়েছে','আপলোড করা'
+      'upload',
+      'uploaded',
+      'আপলোড',
+      'আপলোড হয়েছে',
+      'আপলোড করা',
     ]),
     recorder: includesAny(q, [
-      'record','recorded','recorder','recording','রেকর্ড','রেকর্ডার','রেকর্ড করা','রেকর্ড হয়েছে'
+      'record',
+      'recorded',
+      'recorder',
+      'recording',
+      'রেকর্ড',
+      'রেকর্ডার',
+      'রেকর্ড করা',
+      'রেকর্ড হয়েছে',
     ]),
     running: includesAny(q, [
-      'running','run','চলছে','রানিং','চলমান'
+      'running',
+      'run',
+      'চলছে',
+      'রানিং',
+      'চলমান',
     ]),
     editing: includesAny(q, [
-      'editing done','edited','edit done','editing','এডিট','এডিটিং','এডিট করা','এডিট শেষ'
+      'editing done',
+      'edited',
+      'edit done',
+      'editing',
+      'এডিট',
+      'এডিটিং',
+      'এডিট করা',
+      'এডিট শেষ',
     ]),
     listed: includesAny(q, [
-      'listed','list','লিস্টেড','লিস্ট'
+      'listed',
+      'list',
+      'লিস্টেড',
+      'লিস্ট',
     ]),
     client: includesAny(q, [
-      'client','ক্লায়েন্ট','ক্লায়েন্ট'
+      'client',
+      'ক্লায়েন্ট',
+      'ক্লায়েন্ট',
     ]),
     book: includesAny(q, [
-      'book','বুক','বই'
+      'book',
+      'বুক',
+      'বই',
     ]),
     post: includesAny(q, [
-      'post','posts','পোস্ট','পোস্টগুলো'
+      'post',
+      'posts',
+      'পোস্ট',
+      'পোস্টগুলো',
     ]),
     content: includesAny(q, [
-      'content','কনটেন্ট','কন্টেন্ট'
+      'content',
+      'কনটেন্ট',
+      'কন্টেন্ট',
     ]),
     today: includesAny(q, [
-      'আজ','আজকে','today'
+      'আজ',
+      'আজকে',
+      'today',
     ]),
     channel:
-      q.includes('hhd') ? 'HHD' :
-      q.includes('bhd') ? 'BHD' :
-      q.includes('dhd') ? 'DHD' :
-      null,
+      q.includes('hhd')
+        ? 'HHD'
+        : q.includes('bhd')
+          ? 'BHD'
+          : q.includes('dhd')
+            ? 'DHD'
+            : null,
   };
 }
 
@@ -228,7 +303,7 @@ function rowName(row) {
     'content_name',
     'client_name',
     'book_name',
-    'display_name'
+    'display_name',
   ];
 
   for (const key of keys) {
@@ -245,10 +320,7 @@ function rowName(row) {
 }
 
 function rowChannel(row) {
-  const key = Object.keys(row || {}).find((name) =>
-    /channel/i.test(name)
-  );
-
+  const key = Object.keys(row || {}).find((name) => /channel/i.test(name));
   return key ? String(row[key] ?? '').trim() : '';
 }
 
@@ -256,7 +328,6 @@ function rowStatus(row) {
   const key = Object.keys(row || {}).find((name) =>
     /^status$|status/i.test(name)
   );
-
   return key ? String(row[key] ?? '').trim() : '';
 }
 
@@ -264,7 +335,6 @@ function rowContentType(row) {
   const key = Object.keys(row || {}).find((name) =>
     /content.?type|^type$/i.test(name)
   );
-
   return key ? String(row[key] ?? '').trim() : '';
 }
 
@@ -282,17 +352,14 @@ function videoFields(row) {
       'style_ex',
       'style_ex_video',
       'style_top',
-      'style_top_video'
+      'style_top_video',
     ].includes(k);
   });
 }
 
 function videoStatus(row) {
   const fields = videoFields(row)
-    .map((key) => ({
-      key,
-      value: row[key]
-    }))
+    .map((key) => ({ key, value: row[key] }))
     .filter(
       (item) =>
         item.value !== null &&
@@ -302,9 +369,7 @@ function videoStatus(row) {
 
   if (!fields.length) return null;
 
-  const normalizedValues = fields.map((item) =>
-    normalizeText(item.value)
-  );
+  const normalizedValues = fields.map((item) => normalizeText(item.value));
 
   if (
     normalizedValues.some(
@@ -338,7 +403,6 @@ function videoStatus(row) {
   );
 
   if (allNotSet) return 'Listed';
-
   return 'Running';
 }
 
@@ -347,10 +411,7 @@ function allRows(database) {
 
   for (const [table, rows] of Object.entries(database.tables || {})) {
     for (const row of rows || []) {
-      output.push({
-        table,
-        row
-      });
+      output.push({ table, row });
     }
   }
 
@@ -363,22 +424,16 @@ function filterRows(database, question) {
 
   if (intent.channel) {
     rows = rows.filter((item) =>
-      rowChannel(item.row)
-        .toUpperCase()
-        .includes(intent.channel)
+      rowChannel(item.row).toUpperCase().includes(intent.channel)
     );
   }
 
   if (intent.recorder) {
-    rows = rows.filter(
-      (item) => videoStatus(item.row) === 'Recorder'
-    );
+    rows = rows.filter((item) => videoStatus(item.row) === 'Recorder');
   }
 
   if (intent.running) {
-    rows = rows.filter(
-      (item) => videoStatus(item.row) === 'Running'
-    );
+    rows = rows.filter((item) => videoStatus(item.row) === 'Running');
   }
 
   if (intent.editing) {
@@ -388,20 +443,14 @@ function filterRows(database, question) {
   }
 
   if (intent.listed && !intent.list) {
-    rows = rows.filter(
-      (item) => videoStatus(item.row) === 'Listed'
-    );
+    rows = rows.filter((item) => videoStatus(item.row) === 'Listed');
   }
 
   if (intent.upload) {
     rows = rows.filter((item) => {
       const status = normalizeText(rowStatus(item.row));
       const text = rowText(item.row);
-
-      return (
-        status.includes('upload') ||
-        text.includes('uploaded')
-      );
+      return status.includes('upload') || text.includes('uploaded');
     });
   }
 
@@ -409,11 +458,8 @@ function filterRows(database, question) {
     rows = rows.filter((item) => {
       const keys = Object.keys(item.row || {});
       const text = rowText(item.row);
-
       return (
-        keys.some((key) =>
-          /scheduled_at|schedule|calendar/i.test(key)
-        ) ||
+        keys.some((key) => /scheduled_at|schedule|calendar/i.test(key)) ||
         text.includes('scheduled') ||
         text.includes('schedule')
       );
@@ -421,30 +467,21 @@ function filterRows(database, question) {
   }
 
   if (intent.today) {
-    const today = new Intl.DateTimeFormat(
-      'en-CA',
-      {
-        timeZone: 'Asia/Dhaka',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      }
-    ).format(new Date());
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Dhaka',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
 
-    rows = rows.filter((item) =>
-      rowText(item.row).includes(today)
-    );
+    rows = rows.filter((item) => rowText(item.row).includes(today));
   }
 
-  return {
-    rows,
-    intent
-  };
+  return { rows, intent };
 }
 
 function formatRow(item) {
   const row = item.row;
-
   const name = rowName(row);
   const channel = rowChannel(row);
   const type = rowContentType(row);
@@ -452,7 +489,6 @@ function formatRow(item) {
   const vStatus = videoStatus(row);
 
   const parts = [];
-
   if (name) parts.push(name);
   if (channel) parts.push(`[${channel}]`);
   if (type) parts.push(`— ${type}`);
@@ -469,27 +505,21 @@ function localAnswer(question, database) {
     if (intent.recorder) {
       return `মোট ${rows.length}টি Recorder/Recorded video পাওয়া গেছে।`;
     }
-
     if (intent.editing) {
       return `মোট ${rows.length}টি Editing Done video পাওয়া গেছে।`;
     }
-
     if (intent.running) {
       return `মোট ${rows.length}টি Running video পাওয়া গেছে।`;
     }
-
     if (intent.upload) {
       return `মোট ${rows.length}টি Uploaded matching record পাওয়া গেছে।`;
     }
-
     if (intent.schedule) {
       return `মোট ${rows.length}টি Scheduled matching record পাওয়া গেছে।`;
     }
-
     if (intent.channel) {
       return `${intent.channel} channel-এ ${rows.length}টি matching record পাওয়া গেছে।`;
     }
-
     return `Live D1 database-এ ${rows.length}টি matching record পাওয়া গেছে।`;
   }
 
@@ -499,87 +529,87 @@ function localAnswer(question, database) {
     }
 
     const lines = rows.slice(0, 100).map(
-      (item, index) =>
-        `${index + 1}. ${formatRow(item)}`
+      (item, index) => `${index + 1}. ${formatRow(item)}`
     );
 
     let answer = lines.join('\n');
-
     if (rows.length > 100) {
       answer += `\n\nআরও ${rows.length - 100}টি record আছে।`;
     }
-
     return answer;
   }
 
   if (rows.length) {
-    return rows.slice(0, 50).map(
-      (item, index) =>
-        `${index + 1}. ${formatRow(item)}`
-    ).join('\n');
+    return rows
+      .slice(0, 50)
+      .map((item, index) => `${index + 1}. ${formatRow(item)}`)
+      .join('\n');
   }
 
   return 'এই প্রশ্নের সাথে কোনো matching live database record পাওয়া যায়নি।';
 }
 
-function getOutputText(response) {
-  if (
-    typeof response?.output_text === 'string' &&
-    response.output_text.trim()
-  ) {
-    return response.output_text.trim();
-  }
-
-  return (response?.output || [])
-    .flatMap((item) => item?.content || [])
-    .filter((item) => item?.type === 'output_text')
-    .map((item) => item.text)
-    .join('\n')
-    .trim();
-}
-
-function modelCandidates(env) {
-  const configured = String(env.OPENAI_MODEL || '').trim();
+function geminiModelCandidates(env) {
+  const configured = String(env.GEMINI_MODEL || '').trim();
 
   return [
     configured,
-    'gpt-5.6-luna',
-    'gpt-5.6-terra',
-    'gpt-5.6'
+    'gemini-3.8-flash',
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
   ].filter(
     (value, index, array) =>
       value && array.indexOf(value) === index
   );
 }
 
-async function askOpenAI(env, instructions, input) {
-  const key = String(env.OPENAI_API_KEY || '').trim();
+function extractGeminiText(data) {
+  return (data?.candidates || [])
+    .flatMap((candidate) => candidate?.content?.parts || [])
+    .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+}
+
+async function askGemini(env, systemInstruction, input) {
+  const key = String(env.GEMINI_API_KEY || '').trim();
 
   if (!key) {
-    throw new Error(
-      'OPENAI_API_KEY is not configured in Cloudflare Worker secrets.'
+    const error = new Error(
+      'GEMINI_API_KEY is not configured in Cloudflare Worker secrets.'
     );
+    error.code = 'missing_gemini_key';
+    throw error;
   }
 
   let lastError = null;
 
-  for (const model of modelCandidates(env)) {
+  for (const model of geminiModelCandidates(env)) {
     try {
       const response = await fetch(
-        'https://api.openai.com/v1/responses',
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${key}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'x-goog-api-key': key,
           },
           body: JSON.stringify({
-            model,
-            instructions,
-            input,
-            store: false,
-            max_output_tokens: 3000
-          })
+            systemInstruction: {
+              parts: [{ text: systemInstruction }],
+            },
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: input }],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 4000,
+            },
+          }),
         }
       );
 
@@ -591,74 +621,63 @@ async function askOpenAI(env, instructions, input) {
         try {
           parsed = JSON.parse(raw);
         } catch {
-          throw new Error('OpenAI returned invalid JSON.');
+          throw new Error('Gemini returned invalid JSON.');
         }
 
-        const answer = getOutputText(parsed);
+        const answer = extractGeminiText(parsed);
 
         if (!answer) {
-          throw new Error('OpenAI returned an empty answer.');
+          throw new Error('Gemini returned an empty answer.');
         }
 
         return { answer, model };
       }
 
-      let message =
-        `OpenAI request failed (${response.status})`;
-
+      let message = `Gemini request failed (${response.status})`;
       let code = '';
 
       try {
         const parsed = JSON.parse(raw);
-
-        message =
-          parsed?.error?.message ||
-          message;
-
-        code =
-          parsed?.error?.code ||
-          '';
+        message = parsed?.error?.message || message;
+        code = parsed?.error?.status || parsed?.error?.code || '';
       } catch {
-        if (raw) {
-          message =
-            `${message}: ${raw.slice(0, 500)}`;
-        }
+        if (raw) message = `${message}: ${raw.slice(0, 500)}`;
       }
 
       const error = new Error(message);
-
       error.status = response.status;
       error.code = code;
-
       lastError = error;
 
-      if (response.status === 404) {
+      if (response.status === 404 || response.status === 400) {
         continue;
       }
 
       break;
-
     } catch (error) {
       lastError = error;
     }
   }
 
-  throw (
-    lastError ||
-    new Error('OpenAI request failed.')
-  );
+  throw lastError || new Error('Gemini request failed.');
 }
 
 const INSTRUCTIONS = `
 You are the private AI assistant for the Content Schedule Manager application.
 
-Use ONLY the LIVE DATABASE SNAPSHOT supplied with this request for application-data questions.
+The LIVE DATABASE SNAPSHOT in every request is the source of truth for application data.
+It is read directly from the current Cloudflare D1 database immediately before the AI call.
 
-The snapshot is loaded directly from the current Cloudflare D1 database.
+Use ONLY the supplied LIVE DATABASE SNAPSHOT for application-data questions.
+Never invent, guess, or use old application data.
 
 Understand Bangla, Banglish and English naturally.
-
 Reply in Bangla for Bangla/Banglish questions and English for English questions.
+
+The database can contain posts, content, clients, books, schedules, users and other application tables.
+Search ALL supplied tables when necessary.
+
+HHD, BHD and DHD are channels.
 
 Common terms:
 - কয়টা / কতটি / কতগুলো / how many / count = count
@@ -671,7 +690,9 @@ Common terms:
 - ক্লায়েন্ট / client = client
 - বুক / book = book
 
-HHD, BHD and DHD are channels.
+For counts, calculate from the supplied LIVE D1 rows.
+For lists, return the relevant exact records and preserve exact IDs/names/channels/types/statuses/dates/times.
+Do not confuse dashboard summary numbers with raw D1 row counts.
 
 Use recent conversation context for follow-up questions such as:
 - নামগুলো বল
@@ -680,28 +701,18 @@ Use recent conversation context for follow-up questions such as:
 - কোন channel?
 - আর কয়টা?
 
-For counts, calculate from LIVE D1 data.
-
-For lists, return all relevant records unless a limit is requested.
-
-Search all relevant tables.
-
-Never invent or guess application data.
-
-Do not confuse dashboard metrics with raw D1 row counts.
-
-Preserve exact IDs, names, channels, content types, statuses, dates and times.
+If a question is ambiguous, use the database and recent conversation to infer the intended subject.
+If the database does not contain the requested information, clearly say that it is not available.
 
 Never reveal passwords, password hashes, password salts, API keys, tokens, secrets, authorization values or cookies.
-
-You are READ-ONLY.
+You are READ-ONLY. Never claim that you changed, deleted, created, uploaded or scheduled anything.
 `;
 
 export async function handleChat(request, env) {
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
-      headers: CORS
+      headers: CORS,
     });
   }
 
@@ -709,7 +720,7 @@ export async function handleChat(request, env) {
     return json(
       {
         error: 'method not allowed',
-        version: CHAT_VERSION
+        version: CHAT_VERSION,
       },
       405
     );
@@ -719,7 +730,7 @@ export async function handleChat(request, env) {
     return json(
       {
         error: 'D1 binding DB is not configured',
-        version: CHAT_VERSION
+        version: CHAT_VERSION,
       },
       500
     );
@@ -730,92 +741,50 @@ export async function handleChat(request, env) {
   if (!user) {
     return json(
       {
-        error: 'authentication required'
+        error: 'authentication required',
       },
       401
     );
   }
 
-  const body = await request
-    .json()
-    .catch(() => ({}));
-
-  const question = String(
-    body.message || ''
-  ).trim();
-
-  const history = Array.isArray(body.history)
-    ? body.history.slice(-20)
-    : [];
+  const body = await request.json().catch(() => ({}));
+  const question = String(body.message || '').trim();
+  const history = Array.isArray(body.history) ? body.history.slice(-20) : [];
 
   if (!question) {
-    return json(
-      {
-        error: 'message required'
-      },
-      400
-    );
+    return json({ error: 'message required' }, 400);
   }
 
   if (question.length > 3000) {
-    return json(
-      {
-        error: 'message is too long'
-      },
-      400
-    );
+    return json({ error: 'message is too long' }, 400);
   }
 
   let database;
 
   try {
-    database =
-      await loadCompleteDatabase(env.DB);
+    database = await loadCompleteDatabase(env.DB);
   } catch (error) {
-    console.error(
-      'Chat database load failed:',
-      error
-    );
+    console.error('Chat database load failed:', error);
 
     return json(
       {
         error: 'database read failed',
-        details:
-          error?.message ||
-          String(error),
-        version: CHAT_VERSION
+        details: error?.message || String(error),
+        version: CHAT_VERSION,
       },
       500
     );
   }
 
-  /*
-   * Always build a database answer first.
-   * This is used when OpenAI is unavailable,
-   * out of credits, rate limited, or misconfigured.
-   */
-  const local =
-    localAnswer(
-      question,
-      database
-    );
+  const local = localAnswer(question, database);
 
-  const conversation =
-    history
-      .filter(
-        (item) =>
-          item?.role &&
-          item?.text
-      )
-      .map(
-        (item) =>
-          `${String(
-            item.role
-          ).toUpperCase()}: ${String(
-            item.text
-          )}`
-      )
-      .join('\n');
+  const conversation = history
+    .filter((item) => item?.role && item?.text)
+    .map(
+      (item) =>
+        `${String(item.role).toUpperCase()}: ${String(item.text)}`
+    )
+    .join('\n');
 
   const input = [
     'CURRENT USER QUESTION:',
@@ -828,99 +797,54 @@ export async function handleChat(request, env) {
     JSON.stringify(database),
     '',
     'LOCAL DATABASE INTERPRETATION:',
-    local
+    local,
   ].join('\n');
 
   try {
-    const result =
-      await askOpenAI(
-        env,
-        INSTRUCTIONS,
-        input
-      );
+    const result = await askGemini(env, INSTRUCTIONS, input);
 
     return json({
       ok: true,
-      answer:
-        result.answer,
-      model:
-        result.model,
-      data_source:
-        'live_d1',
-      assistant_version:
-        CHAT_VERSION,
-      ai_available:
-        true,
-      table_counts:
-        database.counts
+      answer: result.answer,
+      model: result.model,
+      provider: 'google_gemini',
+      data_source: 'live_d1',
+      assistant_version: CHAT_VERSION,
+      ai_available: true,
+      table_counts: database.counts,
     });
-
   } catch (error) {
-    console.error(
-      'OpenAI unavailable; using live D1 fallback:',
-      error
-    );
+    console.error('Gemini unavailable; using live D1 fallback:', error);
 
-    const message =
-      String(
-        error?.message || ''
-      ).toLowerCase();
+    const message = String(error?.message || '').toLowerCase();
+    const status = Number(error?.status || 0);
+    const code = String(error?.code || '').toLowerCase();
 
-    const status =
-      Number(
-        error?.status || 0
-      );
+    let reason = 'gemini_unavailable';
 
-    const code =
-      String(
-        error?.code || ''
-      );
-
-    let reason =
-      'openai_unavailable';
-
-    if (
-      status === 429 ||
-      code ===
-        'insufficient_quota' ||
-      code ===
-        'credit_balance_exhausted' ||
-      message.includes(
-        'no credits'
-      ) ||
-      message.includes(
-        'credit balance'
-      ) ||
-      message.includes(
-        'insufficient_quota'
-      )
-    ) {
-      reason =
-        'openai_quota_or_credit';
+    if (code === 'missing_gemini_key' || message.includes('gemini_api_key')) {
+      reason = 'gemini_key_missing';
+    } else if (status === 401 || status === 403) {
+      reason = 'gemini_authentication';
     } else if (
-      status === 401 ||
-      status === 403
+      status === 429 ||
+      message.includes('quota') ||
+      message.includes('rate limit') ||
+      message.includes('resource exhausted')
     ) {
-      reason =
-        'openai_authentication';
+      reason = 'gemini_quota_or_rate_limit';
     }
 
     return json({
       ok: true,
-      answer:
-        local,
-      model:
-        'local-d1-fallback',
-      data_source:
-        'live_d1',
-      assistant_version:
-        CHAT_VERSION,
-      ai_available:
-        false,
-      ai_reason:
-        reason,
-      table_counts:
-        database.counts
+      answer: local,
+      model: 'local-d1-fallback',
+      provider: 'google_gemini',
+      data_source: 'live_d1',
+      assistant_version: CHAT_VERSION,
+      ai_available: false,
+      ai_reason: reason,
+      table_counts: database.counts,
     });
   }
 }
