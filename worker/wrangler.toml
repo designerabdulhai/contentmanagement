@@ -1,5 +1,5 @@
 name = "contentmanagement-api"
-main = "src/entry.js"
+main = "src/entry-safe.js"
 workers_dev = true
 compatibility_date = "2026-08-22"
 
@@ -9,4 +9,4 @@ crons = ["* * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "contentmanagement"
-database_id = "9439d0eb-fff4-42ce-98ae-15095b4ac57a"
+database_id = "9439d0eb-fff4-42ce-98ae-15095b4ac57d"
