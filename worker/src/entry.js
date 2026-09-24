@@ -4,7 +4,7 @@ import { handleContents } from './contents.js';
 
 const SCHEDULER_VERSION = '2026-09-05-auto-status-v4';
 const DHAKA_OFFSET_MINUTES = 6 * 60;
-const ASSISTANT_VERSION = '2026-09-24-ai-assistant-v5';
+const ASSISTANT_VERSION = '2026-09-24-ai-assistant-v6';
 
 function isoDhakaNow() {
   const now = new Date(Date.now() + DHAKA_OFFSET_MINUTES * 60 * 1000);
@@ -99,6 +99,60 @@ function isExplicitScheduleQuestion(question) {
   ]);
 }
 
+function dateFromQuestion(question) {
+  const q = normalizeQuestion(question);
+
+  const iso = q.match(/\b(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})\b/);
+  if (iso) return `${iso[1]}-${String(iso[2]).padStart(2, '0')}-${String(iso[3]).padStart(2, '0')}`;
+
+  const numeric = q.match(/\b(\d{1,2})[-\/](\d{1,2})(?:[-\/](20\d{2}))?\b/);
+  if (numeric) {
+    const day = Number(numeric[1]);
+    const month = Number(numeric[2]);
+    const year = numeric[3] ? Number(numeric[3]) : new Date().getFullYear();
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  const months = {
+    january: 1, jan: 1, february: 2, feb: 2, march: 3, mar: 3,
+    april: 4, apr: 4, may: 5, june: 6, jun: 6, july: 7, jul: 7,
+    august: 8, aug: 8, september: 9, sep: 9, sept: 9, october: 10, oct: 10,
+    november: 11, nov: 11, december: 12, dec: 12,
+    'জানুয়ারি': 1, 'জানুয়ারি': 1, 'ফেব্রুয়ারি': 2, 'ফেব্রুয়ারি': 2,
+    'মার্চ': 3, 'এপ্রিল': 4, 'মে': 5, 'জুন': 6, 'জুলাই': 7,
+    'আগস্ট': 8, 'সেপ্টেম্বর': 9, 'অক্টোবর': 10, 'নভেম্বর': 11, 'ডিসেম্বর': 12,
+  };
+  const monthPattern = Object.keys(months).sort((a, b) => b.length - a.length).join('|');
+
+  const first = q.match(new RegExp(`(?:^|\\s)(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?(?:$|\\s)`, 'i'));
+  if (first) {
+    const day = Number(first[1]);
+    const month = months[first[2].toLowerCase()];
+    const year = first[3] ? Number(first[3]) : new Date().getFullYear();
+    if (month && day >= 1 && day <= 31) return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  const second = q.match(new RegExp(`(?:^|\\s)(${monthPattern})\\s+(\\d{1,2})(?:\\s*,?\\s*(20\\d{2}))?(?:$|\\s)`, 'i'));
+  if (second) {
+    const month = months[second[1].toLowerCase()];
+    const day = Number(second[2]);
+    const year = second[3] ? Number(second[3]) : new Date().getFullYear();
+    if (month && day >= 1 && day <= 31) return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  if (questionHas(q, ['আজ', 'আজকে', 'today'])) return dhakaDate();
+  if (questionHas(q, ['আগামীকাল', 'tomorrow'])) return tomorrowDhakaDate();
+  return null;
+}
+
+function isDatePostQuestion(question) {
+  if (!dateFromQuestion(question)) return false;
+  return questionHas(question, [
+    'post', 'posts', 'পোস্ট', 'পোস্টগুলো', 'ভিডিও', 'video', 'videos',
+    'কি কি', 'কী কী', 'কোনগুলো', 'which', 'show', 'দেখাও', 'নাম', 'list', 'কয়টা', 'কয়টি', 'কতটি', 'কতগুলো',
+  ]);
+}
+
 function statusIsScheduled(row) {
   return String(row?.status || '').trim().toLowerCase() === 'scheduled';
 }
@@ -138,44 +192,50 @@ function scheduledTime(row) {
   return '—';
 }
 
-async function exactScheduledAnswer(request, env) {
+async function exactCalendarAnswer(request, env) {
   let body;
   try { body = await request.clone().json(); } catch { return null; }
   const question = String(body?.message || '').trim();
-  if (!question || !isExplicitScheduleQuestion(question) || !env?.DB) return null;
+  if (!question || !env?.DB) return null;
 
-  // First pass keeps the existing auth/error behavior of handleChat.
+  const scheduleQuestion = isExplicitScheduleQuestion(question);
+  const datePostQuestion = isDatePostQuestion(question);
+  if (!scheduleQuestion && !datePostQuestion) return null;
+
+  // Authenticate before reading Calendar data directly.
   const authResponse = await handleChat(request.clone(), env);
   if (!authResponse?.ok) return authResponse;
 
   const rowsResult = await env.DB.prepare(`SELECT id, project_name, channel, content_type, status, scheduled_at FROM posts WHERE scheduled_at IS NOT NULL ORDER BY scheduled_at ASC, id ASC`).all();
-  let rows = (rowsResult.results || []).filter(statusIsScheduled);
+  let rows = rowsResult.results || [];
 
   const q = normalizeQuestion(question);
   const channel = q.includes('hhd') ? 'HHD' : q.includes('bhd') ? 'BHD' : q.includes('dhd') ? 'DHD' : null;
+
+  // Scheduled questions must match Calendar's Scheduled tab exactly.
+  // Date-only post questions show all Calendar items for that date.
+  if (scheduleQuestion) rows = rows.filter(statusIsScheduled);
+
   if (channel) rows = rows.filter((row) => channelOf(row) === channel);
 
-  const today = questionHas(question, ['আজ', 'আজকে', 'today']);
-  const tomorrow = questionHas(question, ['আগামীকাল', 'tomorrow']);
-  if (today) rows = rows.filter((row) => scheduledDate(row) === dhakaDate());
-  else if (tomorrow) rows = rows.filter((row) => scheduledDate(row) === tomorrowDhakaDate());
+  const targetDate = dateFromQuestion(question);
+  if (targetDate) rows = rows.filter((row) => scheduledDate(row) === targetDate);
 
   const asksCount = questionHas(question, ['কয়টা', 'কয়টি', 'কতটি', 'কতগুলো', 'how many', 'count', 'total']);
-  const asksDetails = questionHas(question, ['কবে', 'কখন', 'সময়', 'সময়', 'time', 'নাম', 'কী কী', 'কি কি', 'list', 'show', 'দেখাও']);
+  const asksDetails = questionHas(question, ['কবে', 'কখন', 'সময়', 'সময়', 'time', 'নাম', 'কী কী', 'কি কি', 'list', 'show', 'দেখাও', 'কোনগুলো', 'which']);
 
+  const label = scheduleQuestion ? 'scheduled' : 'calendar';
   if (asksCount && !asksDetails) {
-    const scope = today ? `আজ (${dhakaDate()})` : tomorrow ? `আগামীকাল (${tomorrowDhakaDate()})` : 'মোট';
-    return new Response(JSON.stringify({ ok: true, answer: `${scope} ${rows.length}টি scheduled post আছে${channel ? ` ${channel}-এ` : ''}.`, assistant_version: ASSISTANT_VERSION, source: 'live_posts_status_scheduled' }), { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
+    return new Response(JSON.stringify({ ok: true, answer: `${targetDate ? `${targetDate} তারিখে ` : ''}${rows.length}টি ${label} post আছে${channel ? ` ${channel}-এ` : ''}.`, assistant_version: ASSISTANT_VERSION, source: scheduleQuestion ? 'live_posts_status_scheduled' : 'live_calendar_posts' }), { status: 200, headers: { ...CORS } });
   }
 
   if (!rows.length) {
-    const scope = today ? `আজ (${dhakaDate()})` : tomorrow ? `আগামীকাল (${tomorrowDhakaDate()})` : 'বর্তমানে';
-    return new Response(JSON.stringify({ ok: true, answer: `${scope} কোনো scheduled post পাওয়া যায়নি।`, assistant_version: ASSISTANT_VERSION, source: 'live_posts_status_scheduled' }), { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
+    return new Response(JSON.stringify({ ok: true, answer: `${targetDate ? `${targetDate} তারিখে ` : ''}কোনো ${label} post পাওয়া যায়নি।`, assistant_version: ASSISTANT_VERSION, source: scheduleQuestion ? 'live_posts_status_scheduled' : 'live_calendar_posts' }), { status: 200, headers: { ...CORS } });
   }
 
-  const scope = today ? `আজ (${dhakaDate()})` : tomorrow ? `আগামীকাল (${tomorrowDhakaDate()})` : 'মোট';
-  const answer = `${scope} ${rows.length}টি scheduled post:\n${rows.slice(0, 100).map((row, i) => `${i + 1}. ${nameOf(row)} [${channelOf(row) || '—'}] — ${typeOf(row)} — Scheduled — ${scheduledDate(row)} ${scheduledTime(row)}`).join('\n')}`;
-  return new Response(JSON.stringify({ ok: true, answer, assistant_version: ASSISTANT_VERSION, source: 'live_posts_status_scheduled' }), { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
+  const scope = targetDate ? `${targetDate} তারিখে` : 'মোট';
+  const answer = `${scope} ${rows.length}টি ${label} post:\n${rows.slice(0, 100).map((row, i) => `${i + 1}. ${nameOf(row)} [${channelOf(row) || '—'}] — ${typeOf(row)} — ${String(row?.status || '—').trim()} — ${scheduledDate(row)} ${scheduledTime(row)}`).join('\n')}`;
+  return new Response(JSON.stringify({ ok: true, answer, assistant_version: ASSISTANT_VERSION, source: scheduleQuestion ? 'live_posts_status_scheduled' : 'live_calendar_posts' }), { status: 200, headers: { ...CORS } });
 }
 
 export default {
@@ -184,14 +244,14 @@ export default {
 
     if (pathname === '/api/chat' || pathname === '/chat') {
       try {
-        const exact = await exactScheduledAnswer(request, env);
+        const exact = await exactCalendarAnswer(request, env);
         if (exact) return exact;
         return await handleChat(request, env);
       } catch (error) {
         console.error('Assistant route failed:', error?.message || error);
         return new Response(JSON.stringify({ ok: false, error: 'assistant route failed', message: error?.message || String(error), assistant_version: ASSISTANT_VERSION }), {
           status: 500,
-          headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' },
+          headers: { ...CORS },
         });
       }
     }
@@ -210,3 +270,10 @@ export default {
 };
 
 export { runScheduler };
+
+const CORS = {
+  'Content-Type': 'application/json; charset=utf-8',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
