@@ -6,7 +6,7 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 };
 
-const CHAT_VERSION = '2026-09-24-gemini-d1-assistant-v7';
+const CHAT_VERSION = '2026-09-24-live-page-aware-assistant-v8';
 const DHAKA_OFFSET_MINUTES = 360;
 
 const json = (data, status = 200) =>
@@ -162,6 +162,7 @@ function detectIntent(question) {
   const q = normalizeText(question);
 
   return {
+    directCount: includesAny(q, ['কয়টা','কতটি','কতগুলো','কয়টি','how many','count','total','number of']),
     count: includesAny(q, [
       'কয়টা', 'কতটি', 'কতগুলো', 'কত', 'কয়টি',
       'how many', 'count', 'total', 'number of',
@@ -191,8 +192,8 @@ function detectIntent(question) {
       'এডিট', 'এডিটিং', 'এডিট করা', 'এডিট শেষ',
     ]),
     listed: includesAny(q, ['listed', 'লিস্টেড']),
-    client: includesAny(q, ['client', 'ক্লায়েন্ট', 'ক্লায়েন্ট']),
-    book: includesAny(q, ['book', 'বুক', 'বই']),
+    client: includesAny(q, ['client', 'clients', 'ক্লায়েন্ট', 'ক্লায়েন্ট']),
+    book: includesAny(q, ['book', 'books', 'বুক', 'বই']),
     post: includesAny(q, ['post', 'posts', 'পোস্ট', 'পোস্টগুলো']),
     content: includesAny(q, ['content', 'কনটেন্ট', 'কন্টেন্ট']),
     today: includesAny(q, ['আজ', 'আজকে', 'today']),
@@ -223,6 +224,58 @@ function postRows(database) {
     ? database.tables.posts
     : [];
 }
+
+
+function tableRowsByName(database, names) {
+  for (const name of names) {
+    if (Array.isArray(database?.tables?.[name])) return database.tables[name];
+  }
+  return [];
+}
+
+function firstNonEmpty(row, keys) {
+  for (const key of keys) {
+    const value = row?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      return String(value).trim();
+    }
+  }
+  return '';
+}
+
+function pageDataAnswer(question, database) {
+  const intent = detectIntent(question);
+
+  if (intent.client) {
+    const rows = tableRowsByName(database, ['clients', 'client']);
+    if (rows.length) {
+      if (intent.count) return `Content Page অনুযায়ী মোট ${rows.length}টি client আছে।`;
+      if (intent.list) {
+        return rows.slice(0, 100).map((row, i) => {
+          const name = firstNonEmpty(row, ['name','client_name','title','company_name','project_name']) || `Client #${row?.id ?? '—'}`;
+          return `${i + 1}. ${name}`;
+        }).join('\n');
+      }
+    }
+  }
+
+  if (intent.book) {
+    const rows = tableRowsByName(database, ['books', 'book']);
+    if (rows.length) {
+      if (intent.count) return `Content Page অনুযায়ী মোট ${rows.length}টি book আছে।`;
+      if (intent.list) {
+        return rows.slice(0, 100).map((row, i) => {
+          const name = firstNonEmpty(row, ['name','book_name','title','project_name']) || `Book #${row?.id ?? '—'}`;
+          return `${i + 1}. ${name}`;
+        }).join('\n');
+      }
+    }
+  }
+
+  return null;
+}
+
+
 
 function rowChannel(row) {
   return String(row?.channel ?? '').trim().toUpperCase();
@@ -569,6 +622,9 @@ function localUploadAnswer(question, database) {
 function generalLocalAnswer(question, database) {
   const intent = detectIntent(question);
 
+  const pageAnswer = pageDataAnswer(question, database);
+  if (pageAnswer) return pageAnswer;
+
   const scheduleAnswer = localScheduleAnswer(question, database);
   if (scheduleAnswer) return scheduleAnswer;
 
@@ -708,8 +764,11 @@ You are the private AI assistant for the Content Schedule Manager application.
 
 SOURCE OF TRUTH:
 - LIVE DATABASE SNAPSHOT is the only source of truth for application data.
-- Never invent, estimate, infer, or guess a database value.
-- When the user asks for an exact count, date, time, name, ID, channel, type or status, use the supplied database values exactly.
+- Content Page is backed by the contents table: one contents row is one video/content item.
+- Calendar Page is backed by the posts table: scheduled_at is the canonical calendar date/time, with project_name, content_type, channel and status.
+- Exact counts, lists, names, dates and times must be calculated from the current live D1 rows before answering.
+- Never count status columns as separate videos and never use the conversation history or a previous model answer as the source of truth.
+- Never invent, estimate, or guess application values.
 - Understand Bangla, Banglish and English. Reply in the user's language/style.
 
 DATA MODEL:
@@ -790,7 +849,7 @@ export async function handleChat(request, env) {
 
   // Exact application-data questions should never be rewritten by Gemini.
   // This is what keeps Calendar/Dashboard counts aligned with D1.
-  if (deterministic && (intent.count || intent.schedule || intent.today || intent.upload)) {
+  if (deterministic && (intent.count || intent.directCount || intent.schedule || intent.today || intent.upload || intent.list || intent.client || intent.book)) {
     return json({
       ok: true,
       answer: deterministic,
@@ -817,6 +876,11 @@ export async function handleChat(request, env) {
     'RECENT CONVERSATION:', conversation || 'none',
     '',
     'LIVE DATABASE SNAPSHOT:', JSON.stringify(database),
+    '',
+    'PAGE DATA CONTRACT:',
+    'Content Page -> contents table; one row = one content/video.',
+    'Calendar Page -> posts table; scheduled_at is the canonical calendar date/time.',
+    'Exact app-data answers must come from live D1 rows, not model memory.',
     '',
     'LOCAL DATABASE INTERPRETATION:', localInterpretation,
   ].join('\n');
