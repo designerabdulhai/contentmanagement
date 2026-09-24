@@ -6,14 +6,14 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 };
 
-const CHAT_VERSION = '2026-09-24-gemini-d1-assistant-v5';
+const CHAT_VERSION = '2026-09-24-gemini-d1-assistant-v6';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: CORS });
 
-const tokenFromRequest = (request) => {
+function tokenFromRequest(request) {
   const header = String(request.headers.get('Authorization') || '');
   return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-};
+}
 
 function base64UrlDecode(value) {
   const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
@@ -72,6 +72,7 @@ async function loadCompleteDatabase(db) {
   const schemaResult = await db.prepare(`SELECT name, type, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND type IN ('table', 'view') ORDER BY type, name`).all();
   const tables = {};
   const schemas = [];
+
   for (const item of schemaResult.results || []) {
     const name = String(item?.name || '').trim();
     if (!name) continue;
@@ -84,6 +85,7 @@ async function loadCompleteDatabase(db) {
       console.warn(`Could not read ${name}:`, error?.message || error);
     }
   }
+
   return {
     generated_at: new Date().toISOString(),
     schemas,
@@ -93,7 +95,13 @@ async function loadCompleteDatabase(db) {
 }
 
 function normalizeText(value) {
-  return String(value ?? '').toLowerCase().normalize('NFKC').replace(/[“”‘’]/g, "'").replace(/[।,!?;:()[\]{}"'`]/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(value ?? '')
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/[“”‘’]/g, "'")
+    .replace(/[।,!?;:()[\]{}"'`]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function includesAny(text, words) {
@@ -104,134 +112,124 @@ function includesAny(text, words) {
 function detectIntent(question) {
   const q = normalizeText(question);
   return {
-    count: includesAny(q, ['কয়টা','কতটি','কতগুলো','কত','how many','count','total','number of','কয়টি']),
-    list: includesAny(q, ['নাম','নামগুলো','list','show','দাও','দেখাও','কে কে','which','what are','কোনগুলো']),
-    schedule: includesAny(q, ['schedule','scheduled','শিডিউল','শিডিউল করা','ক্যালেন্ডার','calendar','কবে','কখন','সময়','time']),
-    upload: includesAny(q, ['upload','uploaded','আপলোড','আপলোড হয়েছে','আপলোড করা']),
-    recorder: includesAny(q, ['record','recorded','recorder','recording','রেকর্ড','রেকর্ডার','রেকর্ড করা','রেকর্ড হয়েছে']),
-    running: includesAny(q, ['running','run','চলছে','রানিং','চলমান']),
-    editing: includesAny(q, ['editing done','edited','edit done','editing','এডিট','এডিটিং','এডিট করা','এডিট শেষ']),
-    listed: includesAny(q, ['listed','list','লিস্টেড','লিস্ট']),
-    client: includesAny(q, ['client','ক্লায়েন্ট','ক্লায়েন্ট']),
-    book: includesAny(q, ['book','বুক','বই']),
-    post: includesAny(q, ['post','posts','পোস্ট','পোস্টগুলো']),
-    content: includesAny(q, ['content','কনটেন্ট','কন্টেন্ট']),
-    today: includesAny(q, ['আজ','আজকে','today']),
+    count: includesAny(q, ['কয়টা', 'কতটি', 'কতগুলো', 'কত', 'how many', 'count', 'total', 'number of', 'কয়টি']),
+    list: includesAny(q, ['নাম', 'নামগুলো', 'list', 'show', 'দাও', 'দেখাও', 'কে কে', 'which', 'what are', 'কোনগুলো']),
+    schedule: includesAny(q, ['schedule', 'scheduled', 'শিডিউল', 'শিডিউল করা', 'ক্যালেন্ডার', 'calendar', 'কবে', 'কখন', 'সময়', 'time']),
+    upload: includesAny(q, ['upload', 'uploaded', 'আপলোড', 'আপলোড হয়েছে', 'আপলোড করা']),
+    recorder: includesAny(q, ['record', 'recorded', 'recorder', 'recording', 'রেকর্ড', 'রেকর্ডার', 'রেকর্ড করা', 'রেকর্ড হয়েছে']),
+    running: includesAny(q, ['running', 'run', 'চলছে', 'রানিং', 'চলমান']),
+    editing: includesAny(q, ['editing done', 'edited', 'edit done', 'editing', 'এডিট', 'এডিটিং', 'এডিট করা', 'এডিট শেষ']),
+    listed: includesAny(q, ['listed', 'লিস্টেড']),
+    client: includesAny(q, ['client', 'ক্লায়েন্ট', 'ক্লায়েন্ট']),
+    book: includesAny(q, ['book', 'বুক', 'বই']),
+    post: includesAny(q, ['post', 'posts', 'পোস্ট', 'পোস্টগুলো']),
+    content: includesAny(q, ['content', 'কনটেন্ট', 'কন্টেন্ট']),
+    today: includesAny(q, ['আজ', 'আজকে', 'today']),
     channel: q.includes('hhd') ? 'HHD' : q.includes('bhd') ? 'BHD' : q.includes('dhd') ? 'DHD' : null,
   };
 }
 
-function rowText(row) {
-  return normalizeText(Object.entries(row || {}).map(([key, value]) => `${key} ${value}`).join(' '));
+const VIDEO_STATUS_COLUMNS = [
+  'full_video_status',
+  'short_ex_status',
+  'short_top_status',
+  'style_ex_status',
+  'style_top_status',
+];
+
+function contentRows(database) {
+  return Array.isArray(database?.tables?.contents) ? database.tables.contents : [];
+}
+
+function rowChannel(row) {
+  return String(row?.channel ?? '').trim().toUpperCase();
 }
 
 function rowName(row) {
-  for (const key of ['project_name','project','name','title','content_name','client_name','book_name','display_name']) {
+  for (const key of ['name', 'project_name', 'project', 'title', 'content_name']) {
     if (row?.[key] !== null && row?.[key] !== undefined && String(row[key]).trim()) return String(row[key]).trim();
   }
   return '';
 }
 
-function rowChannel(row) {
-  const key = Object.keys(row || {}).find((name) => /channel/i.test(name));
-  return key ? String(row[key] ?? '').trim() : '';
+function statusValue(value) {
+  return normalizeText(value).replace(/_/g, ' ').trim();
 }
 
-function rowStatus(row) {
-  const key = Object.keys(row || {}).find((name) => /^status$|status/i.test(name));
-  return key ? String(row[key] ?? '').trim() : '';
-}
+function contentVideoStatus(row) {
+  const values = VIDEO_STATUS_COLUMNS
+    .map((key) => statusValue(row?.[key]))
+    .filter(Boolean);
 
-function rowContentType(row) {
-  const key = Object.keys(row || {}).find((name) => /content.?type|^type$/i.test(name));
-  return key ? String(row[key] ?? '').trim() : '';
-}
+  if (!values.length) return 'Listed';
 
-function videoFields(row) {
-  return Object.keys(row || {}).filter((key) => {
-    const k = key.toLowerCase().replace(/[\s-]/g, '_');
-    return ['full_video','fullvideo','short_ex','short_ex_video','short_top','short_top_video','style_ex','style_ex_video','style_top','style_top_video'].includes(k);
-  });
-}
-
-function videoStatus(row) {
-  const fields = videoFields(row).map((key) => ({ key, value: row[key] })).filter((item) => item.value !== null && item.value !== undefined && String(item.value).trim() !== '');
-  if (!fields.length) return null;
-  const values = fields.map((item) => normalizeText(item.value));
-  if (values.some((value) => value.includes('editing done') || value.includes('edited') || value.includes('edit done'))) return 'Editing Done';
-  if (values.some((value) => value === 'record' || value.includes('recorded') || value.includes('recorder'))) return 'Recorder';
-  if (values.every((value) => !value || value === 'not set' || value === 'none' || value === 'null' || value === 'n/a')) return 'Listed';
+  if (values.some((v) => ['record', 'recorded', 'recorder', 'recording'].includes(v))) return 'Recorder';
+  if (values.some((v) => v.includes('editing done') || v === 'edited' || v.includes('edit done'))) return 'Editing Done';
+  if (values.every((v) => ['not set', 'none', 'null', 'n/a', 'listed', ''].includes(v))) return 'Listed';
   return 'Running';
 }
 
-function allRows(database) {
-  const output = [];
-  for (const [table, rows] of Object.entries(database.tables || {})) for (const row of rows || []) output.push({ table, row });
-  return output;
+function contentRowsForQuestion(database, intent) {
+  let rows = contentRows(database);
+
+  if (intent.channel) {
+    rows = rows.filter((row) => rowChannel(row) === intent.channel);
+  }
+
+  if (intent.recorder) rows = rows.filter((row) => contentVideoStatus(row) === 'Recorder');
+  if (intent.running) rows = rows.filter((row) => contentVideoStatus(row) === 'Running');
+  if (intent.editing) rows = rows.filter((row) => contentVideoStatus(row) === 'Editing Done');
+  if (intent.listed) rows = rows.filter((row) => contentVideoStatus(row) === 'Listed');
+
+  return rows;
 }
 
-function filterRows(database, question) {
+function localContentAnswer(question, database) {
   const intent = detectIntent(question);
-  let rows = allRows(database);
-  if (intent.channel) rows = rows.filter((item) => rowChannel(item.row).toUpperCase().includes(intent.channel));
-  if (intent.recorder) rows = rows.filter((item) => videoStatus(item.row) === 'Recorder');
-  if (intent.running) rows = rows.filter((item) => videoStatus(item.row) === 'Running');
-  if (intent.editing) rows = rows.filter((item) => videoStatus(item.row) === 'Editing Done');
-  if (intent.listed && !intent.list) rows = rows.filter((item) => videoStatus(item.row) === 'Listed');
-  if (intent.upload) rows = rows.filter((item) => normalizeText(rowStatus(item.row)).includes('upload') || rowText(item.row).includes('uploaded'));
-  if (intent.schedule) rows = rows.filter((item) => {
-    const keys = Object.keys(item.row || {});
-    const text = rowText(item.row);
-    return keys.some((key) => /scheduled_at|schedule|calendar/i.test(key)) || text.includes('scheduled') || text.includes('schedule');
-  });
-  if (intent.today) {
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-    rows = rows.filter((item) => rowText(item.row).includes(today));
+  const rows = contentRowsForQuestion(database, intent);
+
+  const videoQuestion = intent.recorder || intent.running || intent.editing || intent.listed;
+
+  if (intent.count && videoQuestion) {
+    const label = intent.recorder ? 'Recorder/Recorded' : intent.running ? 'Running' : intent.editing ? 'Editing Done' : 'Listed';
+    if (intent.channel) return `${intent.channel}-এ মোট ${rows.length}টি ${label} video আছে।`;
+    return `মোট ${rows.length}টি ${label} video আছে।`;
   }
-  return { rows, intent };
+
+  if (intent.count && intent.channel && !videoQuestion) {
+    return `${intent.channel} channel-এ মোট ${rows.length}টি content আছে।`;
+  }
+
+  if ((intent.list || intent.channel) && videoQuestion) {
+    if (!rows.length) return 'Live D1 data অনুযায়ী কোনো matching content পাওয়া যায়নি।';
+    return rows.slice(0, 100).map((row, index) => `${index + 1}. ${rowName(row)} [${rowChannel(row)}] — Video: ${contentVideoStatus(row)}`).join('\n');
+  }
+
+  return null;
 }
 
-function formatRow(item) {
-  const row = item.row;
-  const parts = [];
-  const name = rowName(row), channel = rowChannel(row), type = rowContentType(row), status = rowStatus(row), vStatus = videoStatus(row);
-  if (name) parts.push(name);
-  if (channel) parts.push(`[${channel}]`);
-  if (type) parts.push(`— ${type}`);
-  if (status) parts.push(`— Status: ${status}`);
-  if (vStatus) parts.push(`— Video: ${vStatus}`);
-  return parts.join(' ');
-}
-
-function localAnswer(question, database) {
-  const { rows, intent } = filterRows(database, question);
-  if (intent.count) {
-    if (intent.recorder) return `মোট ${rows.length}টি Recorder/Recorded video পাওয়া গেছে।`;
-    if (intent.editing) return `মোট ${rows.length}টি Editing Done video পাওয়া গেছে।`;
-    if (intent.running) return `মোট ${rows.length}টি Running video পাওয়া গেছে।`;
-    if (intent.upload) return `মোট ${rows.length}টি Uploaded matching record পাওয়া গেছে।`;
-    if (intent.schedule) return `মোট ${rows.length}টি Scheduled matching record পাওয়া গেছে।`;
-    if (intent.channel) return `${intent.channel} channel-এ ${rows.length}টি matching record পাওয়া গেছে।`;
-    return `Live D1 database-এ ${rows.length}টি matching record পাওয়া গেছে।`;
+function generalLocalAnswer(question, database) {
+  const intent = detectIntent(question);
+  if (intent.content || intent.channel || intent.recorder || intent.running || intent.editing || intent.listed) {
+    const answer = localContentAnswer(question, database);
+    if (answer) return answer;
   }
-  if (intent.list || intent.schedule || intent.channel) {
-    if (!rows.length) return 'Live D1 data অনুযায়ী কোনো matching record পাওয়া যায়নি।';
-    const lines = rows.slice(0, 100).map((item, index) => `${index + 1}. ${formatRow(item)}`);
-    let answer = lines.join('\n');
-    if (rows.length > 100) answer += `\n\nআরও ${rows.length - 100}টি record আছে।`;
-    return answer;
-  }
-  if (rows.length) return rows.slice(0, 50).map((item, index) => `${index + 1}. ${formatRow(item)}`).join('\n');
-  return 'এই প্রশ্নের সাথে কোনো matching live database record পাওয়া যায়নি।';
+  return null;
 }
 
 function geminiModelCandidates(env) {
   const configured = String(env.GEMINI_MODEL || '').trim();
-  return [configured || 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'].filter((v, i, a) => v && a.indexOf(v) === i);
+  return [configured || 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite']
+    .filter((v, i, a) => v && a.indexOf(v) === i);
 }
 
 function extractGeminiText(data) {
-  return (data?.candidates || []).flatMap((candidate) => candidate?.content?.parts || []).map((part) => typeof part?.text === 'string' ? part.text : '').filter(Boolean).join('\n').trim();
+  return (data?.candidates || [])
+    .flatMap((candidate) => candidate?.content?.parts || [])
+    .map((part) => typeof part?.text === 'string' ? part.text : '')
+    .filter(Boolean)
+    .join('\n')
+    .trim();
 }
 
 async function askGemini(env, systemInstruction, input) {
@@ -241,6 +239,7 @@ async function askGemini(env, systemInstruction, input) {
     error.code = 'missing_gemini_key';
     throw error;
   }
+
   let lastError = null;
   for (const model of geminiModelCandidates(env)) {
     try {
@@ -253,6 +252,7 @@ async function askGemini(env, systemInstruction, input) {
           generationConfig: { maxOutputTokens: 4000 },
         }),
       });
+
       const raw = await response.text();
       if (response.ok) {
         let parsed;
@@ -261,27 +261,55 @@ async function askGemini(env, systemInstruction, input) {
         if (!answer) throw new Error('Gemini returned an empty answer.');
         return { answer, model };
       }
-      let message = `Gemini request failed (${response.status})`, code = '';
-      try { const parsed = JSON.parse(raw); message = parsed?.error?.message || message; code = parsed?.error?.status || parsed?.error?.code || ''; } catch { if (raw) message += `: ${raw.slice(0, 500)}`; }
-      const error = new Error(message); error.status = response.status; error.code = code; lastError = error;
+
+      let message = `Gemini request failed (${response.status})`;
+      let code = '';
+      try {
+        const parsed = JSON.parse(raw);
+        message = parsed?.error?.message || message;
+        code = parsed?.error?.status || parsed?.error?.code || '';
+      } catch {
+        if (raw) message += `: ${raw.slice(0, 500)}`;
+      }
+
+      const error = new Error(message);
+      error.status = response.status;
+      error.code = code;
+      lastError = error;
+
       if (response.status === 400 || response.status === 404) continue;
       break;
-    } catch (error) { lastError = error; }
+    } catch (error) {
+      lastError = error;
+    }
   }
+
   throw lastError || new Error('Gemini request failed.');
 }
 
 const INSTRUCTIONS = `
 You are the private AI assistant for the Content Schedule Manager application.
-The LIVE DATABASE SNAPSHOT in every request is the source of truth for application data. It is read directly from the current Cloudflare D1 database immediately before the AI call.
-Use ONLY the supplied LIVE DATABASE SNAPSHOT for application-data questions. Never invent, guess, or use old application data.
-Understand Bangla, Banglish and English naturally. Reply in Bangla for Bangla/Banglish questions and English for English questions.
-The database can contain posts, content, clients, books, schedules, users and other application tables. Search ALL supplied tables when necessary.
-HHD, BHD and DHD are channels.
-Common terms: কয়টা/কতটি/how many/count=count; রেকর্ড/record/recorded/recorder=recording; এডিট/editing/edited/editing done=editing; শিডিউল/scheduled/calendar=schedule; আপলোড/upload/uploaded=upload; পোস্ট/post=post; কনটেন্ট/content=content; ক্লায়েন্ট/client=client; বুক/book=book.
-For counts, calculate from the supplied LIVE D1 rows. For lists, return relevant exact records and preserve exact IDs/names/channels/types/statuses/dates/times. Do not confuse dashboard summary numbers with raw D1 row counts.
-Use recent conversation context for follow-up questions. If ambiguous, use the database and recent conversation to infer the intended subject. If unavailable, clearly say so.
-Never reveal passwords, password hashes, password salts, API keys, tokens, secrets, authorization values or cookies. You are READ-ONLY.
+The LIVE DATABASE SNAPSHOT is the source of truth for application data.
+Use ONLY the supplied live D1 data. Never invent or guess application data.
+Understand Bangla, Banglish and English. Reply in the same language style as the user.
+
+IMPORTANT VIDEO RULES:
+- Video production data is stored in the contents table.
+- The dashboard counts one content row as one video/content item, NOT each individual video-status column.
+- Video status columns are: full_video_status, short_ex_status, short_top_status, style_ex_status, style_top_status.
+- If a content row has a Record/Recorded/Recorder value in its video-status columns, its dashboard video status is Recorder.
+- If it has Editing Done/Edited/Edit Done and no Record status, its dashboard video status is Editing Done.
+- If all relevant status values are Listed/Not Set/None/null/N/A, its dashboard video status is Listed.
+- Otherwise its dashboard video status is Running.
+- HHD, BHD and DHD are channels.
+- For questions such as “BHD-এ কয়টা ভিডিও রেকর্ড করা আছে?”, return the exact count of BHD rows in contents whose dashboard video status is Recorder.
+- NEVER add HHD and BHD together when the user asks for one channel.
+- NEVER count individual status columns as separate videos.
+- For exact counts, trust the deterministic LOCAL DATABASE INTERPRETATION supplied with the request.
+
+For application-data questions, preserve exact names, IDs, channels, types, statuses, dates and times from the database.
+Never reveal passwords, password hashes, password salts, API keys, tokens, secrets, authorization values or cookies.
+You are READ-ONLY.
 `;
 
 export async function handleChat(request, env) {
@@ -295,6 +323,7 @@ export async function handleChat(request, env) {
   const body = await request.json().catch(() => ({}));
   const question = String(body.message || '').trim();
   const history = Array.isArray(body.history) ? body.history.slice(-20) : [];
+
   if (!question) return json({ error: 'message required' }, 400);
   if (question.length > 3000) return json({ error: 'message is too long' }, 400);
 
@@ -306,15 +335,54 @@ export async function handleChat(request, env) {
     return json({ error: 'database read failed', details: error?.message || String(error), version: CHAT_VERSION }, 500);
   }
 
-  const local = localAnswer(question, database);
-  const conversation = history.filter((item) => item?.role && item?.text).map((item) => `${String(item.role).toUpperCase()}: ${String(item.text)}`).join('\n');
-  const input = ['CURRENT USER QUESTION:', question, '', 'RECENT CONVERSATION:', conversation || 'none', '', 'LIVE DATABASE SNAPSHOT:', JSON.stringify(database), '', 'LOCAL DATABASE INTERPRETATION:', local].join('\n');
+  const deterministic = generalLocalAnswer(question, database);
+
+  // Exact content/video counts must not be rewritten by an LLM.
+  // This guarantees the assistant matches the Content dashboard.
+  if (deterministic && detectIntent(question).count) {
+    return json({
+      ok: true,
+      answer: deterministic,
+      model: 'deterministic-d1',
+      provider: 'google_gemini',
+      data_source: 'live_d1',
+      assistant_version: CHAT_VERSION,
+      ai_available: true,
+      table_counts: database.counts,
+    });
+  }
+
+  const conversation = history
+    .filter((item) => item?.role && item?.text)
+    .map((item) => `${String(item.role).toUpperCase()}: ${String(item.text)}`)
+    .join('\n');
+
+  const localInterpretation = deterministic || 'No deterministic interpretation was required.';
+  const input = [
+    'CURRENT USER QUESTION:', question,
+    '',
+    'RECENT CONVERSATION:', conversation || 'none',
+    '',
+    'LIVE DATABASE SNAPSHOT:', JSON.stringify(database),
+    '',
+    'LOCAL DATABASE INTERPRETATION:', localInterpretation,
+  ].join('\n');
 
   try {
     const result = await askGemini(env, INSTRUCTIONS, input);
-    return json({ ok: true, answer: result.answer, model: result.model, provider: 'google_gemini', data_source: 'live_d1', assistant_version: CHAT_VERSION, ai_available: true, table_counts: database.counts });
+    return json({
+      ok: true,
+      answer: result.answer,
+      model: result.model,
+      provider: 'google_gemini',
+      data_source: 'live_d1',
+      assistant_version: CHAT_VERSION,
+      ai_available: true,
+      table_counts: database.counts,
+    });
   } catch (error) {
     console.error('Gemini unavailable; using live D1 fallback:', error);
+    const fallback = deterministic || 'Live D1 data পাওয়া গেছে, কিন্তু এই প্রশ্নের উত্তর তৈরি করা যায়নি।';
     const message = String(error?.message || '').toLowerCase();
     const status = Number(error?.status || 0);
     const code = String(error?.code || '').toLowerCase();
@@ -322,6 +390,17 @@ export async function handleChat(request, env) {
     if (code === 'missing_gemini_key' || message.includes('gemini api key')) reason = 'gemini_key_missing';
     else if (status === 401 || status === 403) reason = 'gemini_authentication';
     else if (status === 429 || message.includes('quota') || message.includes('rate limit') || message.includes('resource exhausted')) reason = 'gemini_quota_or_rate_limit';
-    return json({ ok: true, answer: local, model: 'local-d1-fallback', provider: 'google_gemini', data_source: 'live_d1', assistant_version: CHAT_VERSION, ai_available: false, ai_reason: reason, table_counts: database.counts });
+
+    return json({
+      ok: true,
+      answer: fallback,
+      model: 'local-d1-fallback',
+      provider: 'google_gemini',
+      data_source: 'live_d1',
+      assistant_version: CHAT_VERSION,
+      ai_available: false,
+      ai_reason: reason,
+      table_counts: database.counts,
+    });
   }
 }
