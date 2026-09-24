@@ -1,0 +1,155 @@
+import api from './index.js';
+import { handleChatRoute } from './chatRouteFix.js';
+import { handleContents } from './contents.js';
+
+const SCHEDULER_VERSION = '2026-09-05-auto-status-v4';
+const DHAKA_OFFSET_MINUTES = 6 * 60;
+
+const CORS = {
+  'Content-Type': 'application/json; charset=utf-8',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
+};
+
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data), { status, headers: CORS });
+
+function isoDhakaNow() {
+  const now = new Date(Date.now() + DHAKA_OFFSET_MINUTES * 60 * 1000);
+  return now.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function parseScheduledAt(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+
+  if (/Z$|[+-]\d\d:?\d\d$/.test(text)) {
+    const ms = Date.parse(text);
+    return Number.isNaN(ms) ? null : ms;
+  }
+
+  const normalized = text.replace('T', ' ');
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/);
+  if (!match) return null;
+
+  const [, y, mo, d, h, mi, s = '00'] = match;
+  return Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h) - 6, Number(mi), Number(s));
+}
+
+async function writeAudit(db, postId, action, payload) {
+  try {
+    await db.prepare(`INSERT INTO audit (post_id, action, payload, actor) VALUES (?, ?, ?, ?)`).bind(
+      postId ?? null,
+      action,
+      JSON.stringify(payload ?? null),
+      'scheduler'
+    ).run();
+  } catch (error) {
+    console.warn('Scheduler audit failed:', error?.message || error);
+  }
+}
+
+async function runScheduler(env) {
+  if (!env?.DB) throw new Error('D1 binding DB is not configured');
+
+  const nowMs = Date.now();
+  const rows = await env.DB.prepare(`
+    SELECT id, project_name, status, scheduled_at
+    FROM posts
+    WHERE lower(trim(COALESCE(status, ''))) = 'scheduled'
+      AND scheduled_at IS NOT NULL
+  `).all();
+
+  const posts = rows.results || [];
+  const result = {
+    ok: true,
+    scheduler_version: SCHEDULER_VERSION,
+    timezone: 'Asia/Dhaka',
+    now_dhaka: isoDhakaNow(),
+    checked: posts.length,
+    due: 0,
+    updated: 0,
+    errors: 0,
+  };
+
+  for (const post of posts) {
+    try {
+      const scheduledMs = parseScheduledAt(post.scheduled_at);
+      if (scheduledMs === null) continue;
+      if (scheduledMs > nowMs) continue;
+
+      result.due += 1;
+      await env.DB.prepare(`
+        UPDATE posts
+        SET status = 'Uploaded'
+        WHERE id = ?
+          AND lower(trim(COALESCE(status, ''))) = 'scheduled'
+      `).bind(post.id).run();
+
+      const verify = await env.DB.prepare(`SELECT status FROM posts WHERE id = ?`).bind(post.id).first();
+      if (String(verify?.status || '').trim().toLowerCase() !== 'uploaded') {
+        throw new Error(`Status update verification failed for post ${post.id}`);
+      }
+
+      result.updated += 1;
+      await writeAudit(env.DB, post.id, 'automatic_status_update', {
+        project_name: post.project_name,
+        previous_status: post.status,
+        new_status: 'Uploaded',
+        scheduled_at: post.scheduled_at,
+        automatic: true,
+        scheduler_version: SCHEDULER_VERSION,
+      });
+    } catch (error) {
+      result.errors += 1;
+      console.error(`Scheduler failed for post ${post.id}:`, error?.message || error);
+    }
+  }
+
+  return result;
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    try {
+      const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+
+      if (pathname === '/api/chat' || pathname === '/chat') {
+        return await handleChatRoute(request, env);
+      }
+
+      if (pathname === '/api/contents' || pathname === '/contents') {
+        return await handleContents(request, env);
+      }
+
+      if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: CORS });
+      }
+
+      if (request.method === 'POST' && pathname === '/api/scheduler/run') {
+        try {
+          return json(await runScheduler(env));
+        } catch (error) {
+          return json({ ok: false, error: error?.message || String(error) }, 500);
+        }
+      }
+
+      return await api.fetch(request, env, ctx);
+    } catch (error) {
+      console.error('Worker entry error:', error?.message || error);
+      return json({
+        ok: false,
+        error: 'worker request failed',
+        message: error?.message || String(error),
+        worker: 'contentmanagement-api',
+      }, 500);
+    }
+  },
+
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(runScheduler(env));
+  },
+};
