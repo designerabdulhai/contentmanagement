@@ -767,6 +767,64 @@ async function handle(request, env) {
     return json(result.results || []);
   }
 
+  // FAST DASHBOARD FEED
+  // Returns the rows needed for dashboard charts/search plus the small due-soon
+  // list in one D1 batch. This avoids three browser-to-Worker round trips.
+  if (method === 'GET' && path === '/api/dashboard/feed') {
+    const rawLimit = Number(url.searchParams.get('limit') || 200);
+    const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 200, 1), 500);
+
+    const [postsResult, dueSoonResult] = await db.batch([
+      db.prepare(`
+        SELECT
+          id,
+          project_name,
+          content_type,
+          channel,
+          platform,
+          status,
+          scheduled_at,
+          uploaded_link,
+          notes,
+          created_by,
+          recurring_rule,
+          is_overdue,
+          created_at
+        FROM posts
+        ORDER BY scheduled_at IS NULL, scheduled_at, id
+        LIMIT ?
+      `).bind(limit),
+      db.prepare(`
+        SELECT
+          id,
+          project_name,
+          content_type,
+          channel,
+          platform,
+          status,
+          scheduled_at,
+          uploaded_link,
+          notes,
+          created_by,
+          recurring_rule,
+          is_overdue,
+          created_at
+        FROM posts
+        WHERE scheduled_at IS NOT NULL
+          AND scheduled_at >= datetime('now')
+          AND scheduled_at < datetime('now', '+7 days')
+          AND (status IS NULL OR status != 'Uploaded')
+        ORDER BY scheduled_at ASC, id ASC
+        LIMIT 5
+      `),
+    ]);
+
+    return json({
+      posts: postsResult.results || [],
+      dueSoon: dueSoonResult.results || [],
+    });
+  }
+
   // SUMMARY
   if (method === 'GET' && path === '/api/summary') {
     const [total, scheduled, uploaded, listed, overdue] =
