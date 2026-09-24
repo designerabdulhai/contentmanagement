@@ -121,7 +121,9 @@ export default {
         return await handleChatRoute(request, env);
       }
 
-      if (pathname === '/api/contents' || pathname === '/contents') {
+      // Handle both the collection and item routes.
+      // Inline status changes use PUT /api/contents/:id.
+      if (/^\/(?:api\/)?contents(?:\/\d+)?\/?$/.test(pathname)) {
         return await handleContents(request, env);
       }
 
