@@ -93,9 +93,12 @@ function tomorrowDhakaDate() {
 }
 
 function isExplicitScheduleQuestion(question) {
+  // IMPORTANT: "কবে/কখন/time" alone does NOT mean Scheduled.
+  // They are also used for Uploaded/Posted questions such as
+  // "HHD862 Short Top কবে আপলোড হয়েছে?".
   return questionHas(question, [
-    'scheduled', 'schedule', 'শিডিউল', 'শিডিউল করা', 'শিডিউল করা আছে',
-    'কয়টি ভিডিও শিডিউল', 'কয়টা scheduled', 'scheduled post',
+    'scheduled', 'schedule', 'শিডিউল', 'শিডিউল করা',
+    'scheduled post', 'scheduled posts', 'শিডিউল পোস্ট',
   ]);
 }
 
@@ -202,7 +205,6 @@ async function exactCalendarAnswer(request, env) {
   const datePostQuestion = isDatePostQuestion(question);
   if (!scheduleQuestion && !datePostQuestion) return null;
 
-  // Authenticate before reading Calendar data directly.
   const authResponse = await handleChat(request.clone(), env);
   if (!authResponse?.ok) return authResponse;
 
@@ -212,10 +214,7 @@ async function exactCalendarAnswer(request, env) {
   const q = normalizeQuestion(question);
   const channel = q.includes('hhd') ? 'HHD' : q.includes('bhd') ? 'BHD' : q.includes('dhd') ? 'DHD' : null;
 
-  // Scheduled questions must match Calendar's Scheduled tab exactly.
-  // Date-only post questions show all Calendar items for that date.
   if (scheduleQuestion) rows = rows.filter(statusIsScheduled);
-
   if (channel) rows = rows.filter((row) => channelOf(row) === channel);
 
   const targetDate = dateFromQuestion(question);
@@ -249,31 +248,31 @@ export default {
         return await handleChat(request, env);
       } catch (error) {
         console.error('Assistant route failed:', error?.message || error);
-        return new Response(JSON.stringify({ ok: false, error: 'assistant route failed', message: error?.message || String(error), assistant_version: ASSISTANT_VERSION }), {
-          status: 500,
-          headers: { ...CORS },
-        });
+        return new Response(JSON.stringify({ ok: false, error: 'assistant route failed', message: error?.message || String(error) }), { status: 500, headers: CORS });
       }
     }
 
-    if (pathname === '/api/contents' || pathname === '/contents' || /^\/api\/contents\/\d+$/.test(pathname) || /^\/contents\/\d+$/.test(pathname)) {
+    if (pathname === '/api/contents' || pathname === '/contents') {
       return handleContents(request, env);
+    }
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: CORS });
+    }
+
+    if (request.method === 'POST' && pathname === '/api/scheduler/run') {
+      try {
+        const result = await runScheduler(env);
+        return new Response(JSON.stringify(result), { status: 200, headers: CORS });
+      } catch (error) {
+        return new Response(JSON.stringify({ ok: false, error: error?.message || String(error) }), { status: 500, headers: CORS });
+      }
     }
 
     return api.fetch(request, env, ctx);
   },
 
-  async scheduled(event, env, ctx) {
-    console.log(`Cron started: ${event?.cron || 'unknown'} at ${event?.scheduledTime || Date.now()}`);
-    await runScheduler(env);
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(runScheduler(env));
   },
-};
-
-export { runScheduler };
-
-const CORS = {
-  'Content-Type': 'application/json; charset=utf-8',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
