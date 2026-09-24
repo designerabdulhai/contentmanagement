@@ -29,12 +29,10 @@ jobs:
           set -e
           if [ -z "$CF_API_TOKEN" ]; then
             echo "ERROR: GitHub Actions secret CLOUDFLARE_API_TOKEN is missing."
-            echo "Add it in: Settings -> Secrets and variables -> Actions."
             exit 1
           fi
           if [ -z "$CF_ACCOUNT_ID" ]; then
             echo "ERROR: GitHub Actions secret CLOUDFLARE_ACCOUNT_ID is missing."
-            echo "Add it in: Settings -> Secrets and variables -> Actions."
             exit 1
           fi
           echo "Cloudflare deployment secrets are configured."
@@ -54,13 +52,9 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: wrangler deploy --dry-run
 
-      - name: Apply remote D1 migrations
-        working-directory: worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: wrangler d1 migrations apply contentmanagement --remote
-
+      # D1 migrations are intentionally not run automatically here.
+      # The production database already contains the live contents schema,
+      # while the Worker dynamically detects available columns for compatibility.
       - name: Deploy Worker
         working-directory: worker
         env:
