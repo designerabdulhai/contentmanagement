@@ -1,9 +1,8 @@
 import axios from 'axios';
 
-// Use the live Cloudflare Worker directly so the List page does not wait on
-// the Vercel proxy before showing the existing post data.
-const WORKER_URL = 'https://contentmanagement-api.rubel-bhd1.workers.dev';
-const baseURL = `${WORKER_URL}/api`;
+// Keep browser requests same-origin in production. Vercel rewrites /api/*
+// to api/index.js, which forwards the request to the Cloudflare Worker.
+const baseURL = '/api';
 const TOKEN_KEY = 'content_schedule_auth_token';
 
 const api = axios.create({
@@ -27,10 +26,9 @@ function toMessage(value) {
   if (value == null) return '';
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'object') {
-    // Prefer the detailed server message when the API also returns a generic
-    // error label such as "content request failed".
     if (typeof value.message === 'string' && value.message.trim()) return value.message.trim();
-    if (typeof value.error === 'string') return value.error.trim();
+    if (typeof value.error === 'string' && value.error.trim()) return value.error.trim();
+    if (value.error && typeof value.error.message === 'string' && value.error.message.trim()) return value.error.message.trim();
     try { return JSON.stringify(value); } catch { return ''; }
   }
   return String(value);
