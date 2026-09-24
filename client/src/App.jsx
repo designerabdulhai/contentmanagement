@@ -23,6 +23,23 @@ function getInitialRoute(){
   try { const saved = localStorage.getItem(ACTIVE_ROUTE_KEY); return ROUTES.has(saved) ? saved : 'dashboard'; } catch(e) { return 'dashboard'; }
 }
 
+// Decode only the non-sensitive token payload so the application shell can
+// render immediately. The API still validates the token in the background.
+function getOptimisticUser(token){
+  try {
+    const encoded = String(token || '').split('.')[0];
+    if (!encoded) return null;
+    const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(normalized + '='.repeat((4 - normalized.length % 4) % 4)));
+    const id = Number(payload?.split?.('.')?.[0]);
+    const exp = Number(payload?.split?.('.')?.[1]);
+    if (!Number.isInteger(id) || !Number.isFinite(exp) || exp <= Math.floor(Date.now() / 1000)) return null;
+    return { id };
+  } catch {
+    return null;
+  }
+}
+
 export default function App(){
   const [user, setUser] = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
@@ -43,14 +60,36 @@ export default function App(){
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
-    if (!token) { setAuthChecking(false); return; }
-    api.get('/auth/me').then(r => setUser(r.data.user)).catch(() => localStorage.removeItem(TOKEN_KEY)).finally(() => setAuthChecking(false));
+
+    if (!token) {
+      setAuthChecking(false);
+      return;
+    }
+
+    // Do not block the whole application on /auth/me. The old implementation
+    // kept the entire page on "Loading…" until this request completed.
+    const optimisticUser = getOptimisticUser(token);
+    if (optimisticUser) {
+      setUser(optimisticUser);
+      setAuthChecking(false);
+    }
+
+    api.get('/auth/me')
+      .then(r => setUser(r.data.user))
+      .catch(() => {
+        localStorage.removeItem(TOKEN_KEY);
+        setUser(null);
+      })
+      .finally(() => setAuthChecking(false));
   }, []);
 
   useEffect(()=>{
     if (!user) return;
-    api.get('/invites').then(r=>setManagers(r.data)).catch(()=>{});
-    loadProfile();
+    // These requests can run together without delaying the first render.
+    Promise.allSettled([
+      api.get('/invites').then(r=>setManagers(r.data)),
+      loadProfile(),
+    ]);
   },[user])
 
   useEffect(()=>{
@@ -120,7 +159,7 @@ export default function App(){
     setUser(null);
   };
 
-  if (authChecking) return <div className="auth-loading">Loading…</div>;
+  if (authChecking && !user) return <div className="auth-loading">Loading…</div>;
   if (!user) return <Login onLogin={setUser} />;
 
   return (
