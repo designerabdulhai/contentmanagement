@@ -6,7 +6,7 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 };
 
-const CHAT_VERSION = '2026-09-24-gemini-d1-assistant-v1';
+const CHAT_VERSION = '2026-09-24-gemini-d1-assistant-v2';
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -555,8 +555,11 @@ function geminiModelCandidates(env) {
   return [
     configured,
     'gemini-3.8-flash',
+    'gemini-3.7-flash',
+    'gemini-3.6-flash',
     'gemini-3.5-flash',
     'gemini-3.5-flash-lite',
+    'gemini-2.5-flash',
   ].filter(
     (value, index, array) =>
       value && array.indexOf(value) === index
@@ -573,11 +576,19 @@ function extractGeminiText(data) {
 }
 
 async function askGemini(env, systemInstruction, input) {
-  const key = String(env.GEMINI_API_KEY || '').trim();
+  // Cloudflare Worker environment variable names are case-sensitive.
+  // Support the exact secret name currently used in Cloudflare:
+  // Gemini_API_Key, plus the conventional GEMINI_API_KEY name.
+  const key = String(
+    env.GEMINI_API_KEY ||
+    env.Gemini_API_Key ||
+    env.Gemini_API_KEY ||
+    ''
+  ).trim();
 
   if (!key) {
     const error = new Error(
-      'GEMINI_API_KEY is not configured in Cloudflare Worker secrets.'
+      'Gemini API key is not configured. Add a Cloudflare Worker Secret named GEMINI_API_KEY or Gemini_API_Key.'
     );
     error.code = 'missing_gemini_key';
     throw error;
@@ -822,7 +833,7 @@ export async function handleChat(request, env) {
 
     let reason = 'gemini_unavailable';
 
-    if (code === 'missing_gemini_key' || message.includes('gemini_api_key')) {
+    if (code === 'missing_gemini_key' || message.includes('gemini api key')) {
       reason = 'gemini_key_missing';
     } else if (status === 401 || status === 403) {
       reason = 'gemini_authentication';
