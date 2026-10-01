@@ -153,10 +153,23 @@ async function createContent(request, db, user) {
   const fields = WRITABLE_FIELDS.filter((field) => columns.has(field));
   if (columns.has('created_by')) fields.push('created_by');
 
+  // Some production D1 schemas have NOT NULL constraints on status columns.
+  // Always send a concrete default for those fields when creating a new row.
+  const createDefaults = {
+    full_video_status: '',
+    short_ex_status: '',
+    short_top_status: '',
+    style_ex_status: '',
+    style_top_status: '',
+    poster_status: '',
+  };
+
   const values = fields.map((field) =>
     field === 'name' ? name :
     field === 'created_by' ? user.id :
-    valueFor(field, payload)
+    payload?.[field] === undefined && Object.prototype.hasOwnProperty.call(createDefaults, field)
+      ? createDefaults[field]
+      : valueFor(field, payload)
   );
 
   const placeholders = fields.map(() => '?').join(', ');
