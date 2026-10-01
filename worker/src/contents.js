@@ -97,6 +97,16 @@ const WRITABLE_FIELDS = [
 
 function valueFor(field, payload) {
   if (field === 'emergency') return Number(payload?.[field]) === 1 ? 1 : 0;
+
+  // Status columns are NOT NULL in some production D1 versions. The UI uses
+  // an empty string for "Not set", but SQLite must receive a valid value.
+  // Normalize missing/empty statuses to the blank string so new-content
+  // creation never violates a NOT NULL constraint.
+  if (field.endsWith('_status')) {
+    const value = payload?.[field];
+    return value === undefined || value === null || value === '' ? '' : String(value);
+  }
+
   const value = payload?.[field];
   return value === undefined || value === '' ? null : value;
 }
