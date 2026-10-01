@@ -18,7 +18,14 @@ function emptyContent(){
 
 function videoStatuses(item){return VIDEO_FIELDS.map(([key])=>String(item?.[`${key}_status`]||''))}
 function isListedVideo(item){const statuses=videoStatuses(item);return statuses.length>0&&statuses.every(status=>status==='')}
-function isRecorderVideo(item){const statuses=videoStatuses(item);return statuses.length>0&&statuses.every(status=>status==='Record')}
+function isRecorderVideo(item){
+  const statuses=videoStatuses(item)
+  // A content is in the Recorder tab when its production has started with
+  // Record status and every status that has been set is still Record.
+  // Unset deliverables are allowed here (e.g. Full Video=Record while the
+  // Short/Style fields are still Not set).
+  return statuses.length>0&&statuses.some(status=>status==='Record')&&statuses.every(status=>status===''||status==='Record')
+}
 function isUploadedVideo(item){return videoStatuses(item).length>0&&videoStatuses(item).every(status=>status==='Upload')&&String(item?.poster_status||'')==='Upload'}
 function isRunningVideo(item){return !isListedVideo(item)&&!isRecorderVideo(item)&&!isUploadedVideo(item)&&videoStatuses(item).some(status=>status!=='')}
 
