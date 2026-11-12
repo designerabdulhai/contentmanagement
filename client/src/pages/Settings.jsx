@@ -262,15 +262,15 @@ export default function Settings(){
 
       <div className="setting-group">
         <label>Content Types (comma separated)</label>
-        <input value={(settings.content_types||[]).join(', ')} onChange={e=>setSettings(s=>({...s,content_types:parseCommaSeparated(e.target.value)}))} onBlur={e=>{const values=parseCommaSeparated(e.target.value);setSettings(s=>({...s,content_types:values}));save('content_types',values).catch(()=>{});}} />
+        <input value={(settings.content_types||[]).join(', ')} onChange={e=>setSettings(s=>({...s,content_types:e.target.value.split(',').map(v=>v.trim())}))} onBlur={e=>{const values=parseCommaSeparated(e.target.value);setSettings(s=>({...s,content_types:values}));save('content_types',values).catch(()=>{});}} />
       </div>
       <div className="setting-group">
         <label>Channels</label>
-        <input value={(settings.channels||[]).join(', ')} onChange={e=>setSettings(s=>({...s,channels:parseCommaSeparated(e.target.value)}))} onBlur={e=>{const values=parseCommaSeparated(e.target.value);setSettings(s=>({...s,channels:values}));save('channels',values).catch(()=>{});}} />
+        <input value={(settings.channels||[]).join(', ')} onChange={e=>setSettings(s=>({...s,channels:e.target.value.split(',').map(v=>v.trim())}))} onBlur={e=>{const values=parseCommaSeparated(e.target.value);setSettings(s=>({...s,channels:values}));save('channels',values).catch(()=>{});}} />
       </div>
       <div className="setting-group">
         <label>Platforms</label>
-        <input value={(settings.platforms||[]).join(', ')} onChange={e=>setSettings(s=>({...s,platforms:parseCommaSeparated(e.target.value)}))} onBlur={e=>{const values=parseCommaSeparated(e.target.value);setSettings(s=>({...s,platforms:values}));save('platforms',values).catch(()=>{});}} />
+        <input value={(settings.platforms||[]).join(', ')} onChange={e=>setSettings(s=>({...s,platforms:e.target.value.split(',').map(v=>v.trim())}))} onBlur={e=>{const values=parseCommaSeparated(e.target.value);setSettings(s=>({...s,platforms:values}));save('platforms',values).catch(()=>{});}} />
       </div>
       <div className="invite">
         <h3>Invite Manager</h3>
