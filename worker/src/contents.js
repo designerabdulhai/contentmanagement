@@ -79,6 +79,7 @@ const WRITABLE_FIELDS = [
   'name',
   'channel',
   'emergency',
+  'client_video',
   'full_video_status',
   'short_ex_status',
   'short_top_status',
