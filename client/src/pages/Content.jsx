@@ -13,7 +13,7 @@ const VIDEO_FIELDS = [
 ]
 
 function emptyContent(){
-  return {name:'',channel:'',emergency:0,full_video_status:'',short_ex_status:'',short_top_status:'',style_ex_status:'',style_top_status:'',poster_status:'',document_link:'',file_path:''}
+  return {name:'',channel:'',emergency:0,client_video:0,full_video_status:'',short_ex_status:'',short_top_status:'',style_ex_status:'',style_top_status:'',poster_status:'',document_link:'',file_path:''}
 }
 
 function videoStatuses(item){return VIDEO_FIELDS.map(([key])=>String(item?.[`${key}_status`]||''))}
@@ -101,6 +101,20 @@ export default function Content(){
     }
   }
 
+  const updateClientVideo=async(item,checked)=>{
+    setError('')
+    const value=checked?1:0
+    const next={...item,client_video:value}
+    setItems(current=>current.map(row=>row.id===item.id?next:row))
+    try{
+      const r=await api.put(`/contents/${item.id}`,{client_video:value})
+      setItems(current=>current.map(row=>row.id===item.id?r.data:row))
+    }catch(e){
+      setItems(current=>current.map(row=>row.id===item.id?item:row))
+      setError(e.message||'Unable to update client video')
+    }
+  }
+
   const deleteContent=async item=>{if(!window.confirm(`Delete "${item.name}"?\n\nThis action cannot be undone.`))return;setError('');try{await api.delete(`/contents/${item.id}`);setItems(current=>current.filter(row=>row.id!==item.id));if(editing?.id===item.id){setEditing(null);setShowModal(false)}}catch(e){setError(e.message||'Unable to delete content')}}
 
   return <div className="page content-page">
@@ -118,7 +132,7 @@ export default function Content(){
     </div>
     <div className="content-toolbar"><input className="search content-search" placeholder="Search content" value={search} onChange={e=>setSearch(e.target.value)} /><div className="content-filter-groups"><div className="content-channel-tabs" role="tablist" aria-label="Channel filter">{[['all','All Channels',items.length],...CHANNELS.map(ch=>[ch,ch,channelCounts[ch]])].map(([key,label,count])=><button key={key} className={channelFilter===key?'active':''} type="button" onClick={()=>{setChannelFilter(key);setSummaryFilter(null)}}>{label}<span>{count}</span></button>)}</div><div className="content-tabs" role="tablist" aria-label="Status filter">{[['all','All',items.length],['ready','Video Ready',counts.ready],['recorded','Recorded Video',counts.recorded],['running','Running',counts.running],['uploaded','Uploaded',counts.uploaded]].map(([key,label,count])=><button key={key} className={tab===key?'active':''} type="button" onClick={()=>{setTab(key);setSummaryFilter(null)}}>{label}<span>{count}</span></button>)}</div></div></div>
     {error&&<div className="content-error">{error}</div>}
-    <div className="table-wrap card content-table-wrap">{loading?<div className="content-empty">Loading content…</div>:visible.length===0?<div className="content-empty">No content found.</div>:<table className="content-table"><thead><tr><th>Name</th><th>Channel</th><th>Full Video</th><th>Short Ex</th><th>Short Top</th><th>Style Ex</th><th>Style Top</th><th>Poster</th><th aria-label="Emergency"></th><th>Actions</th></tr></thead><tbody>{visible.map(item=><tr key={item.id} className={rowClassOf(item)}><td className="content-name">{item.name}</td><td><ChannelBadge value={item.channel}/></td><td><StatusCell item={item} field="full_video" status={item.full_video_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="short_ex" status={item.short_ex_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="short_top" status={item.short_top_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="style_ex" status={item.style_ex_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="style_top" status={item.style_top_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="poster" status={item.poster_status} onStatus={updateStatus}/></td><td><label className="emergency-check" title="Emergency"><input type="checkbox" aria-label={`Emergency ${item.name}`} checked={Number(item.emergency)===1} onChange={e=>updateEmergency(item,e.target.checked)}/></label></td><td className="actions content-actions"><button type="button" title={item.document_link?'Open Document':'Document link not set'} disabled={!item.document_link} onClick={()=>item.document_link&&window.open(item.document_link,'_blank','noopener,noreferrer')}>↗</button><button type="button" title={item.file_path?'Copy Path':'File path not set'} disabled={!item.file_path} onClick={()=>copyPath(item.file_path)}>⧉</button><button type="button" title="Edit" onClick={()=>{setEditing(item);setShowModal(true)}}>✏️</button><button type="button" className="content-delete-button" title="Delete" onClick={()=>deleteContent(item)}>🗑️</button></td></tr>)}</tbody></table>}</div>
+    <div className="table-wrap card content-table-wrap">{loading?<div className="content-empty">Loading content…</div>:visible.length===0?<div className="content-empty">No content found.</div>:<table className="content-table"><thead><tr><th>Name</th><th>Client V</th><th>Channel</th><th>Full Video</th><th>Short Ex</th><th>Short Top</th><th>Style Ex</th><th>Style Top</th><th>Poster</th><th aria-label="Emergency"></th><th>Actions</th></tr></thead><tbody>{visible.map(item=><tr key={item.id} className={rowClassOf(item)}><td className="content-name">{item.name}</td><td><label className="emergency-check" title="Client Video"><input type="checkbox" aria-label={`Client Video ${item.name}`} checked={Number(item.client_video)===1} onChange={e=>updateClientVideo(item,e.target.checked)}/></label></td><td><ChannelBadge value={item.channel}/></td><td><StatusCell item={item} field="full_video" status={item.full_video_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="short_ex" status={item.short_ex_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="short_top" status={item.short_top_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="style_ex" status={item.style_ex_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="style_top" status={item.style_top_status} onStatus={updateStatus}/></td><td><StatusCell item={item} field="poster" status={item.poster_status} onStatus={updateStatus}/></td><td><label className="emergency-check" title="Emergency"><input type="checkbox" aria-label={`Emergency ${item.name}`} checked={Number(item.emergency)===1} onChange={e=>updateEmergency(item,e.target.checked)}/></label></td><td className="actions content-actions"><button type="button" title={item.document_link?'Open Document':'Document link not set'} disabled={!item.document_link} onClick={()=>item.document_link&&window.open(item.document_link,'_blank','noopener,noreferrer')}>↗</button><button type="button" title={item.file_path?'Copy Path':'File path not set'} disabled={!item.file_path} onClick={()=>copyPath(item.file_path)}>⧉</button><button type="button" title="Edit" onClick={()=>{setEditing(item);setShowModal(true)}}>✏️</button><button type="button" className="content-delete-button" title="Delete" onClick={()=>deleteContent(item)}>🗑️</button></td></tr>)}</tbody></table>}</div>
     {showModal&&<ContentModal initial={editing||emptyContent()} saving={saving} onCancel={()=>{setShowModal(false);setEditing(null)}} onSave={save}/>} 
   </div>
 }
