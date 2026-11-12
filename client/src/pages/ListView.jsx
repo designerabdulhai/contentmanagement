@@ -4,7 +4,6 @@ import PostForm from '../components/PostForm'
 import LinkActions from '../components/LinkActions'
 
 const STATUS_OPTIONS = ['Listed','Scheduled','Uploaded'];
-const CONTENT_TYPES = ['Full Video','Short Ex','Short Top','Short Style','Short Top Style','Short Music','Desk Short','Client','Book'];
 const TOKEN_KEY = 'content_schedule_auth_token';
 const POSTS_CACHE_KEY = 'content_schedule_posts_cache';
 
@@ -89,6 +88,7 @@ function channelRowStyle(channel){
 export default function ListView(){
   const [posts,setPosts]=useState(readCachedPosts);
   const [postsLoading,setPostsLoading]=useState(true);
+  const [contentTypes,setContentTypes]=useState([]);
   const [filters,setFilters]=useState({search:'',channel:'',content_type:'',status:'',period:'all'});
   const [selectedContentTypes,setSelectedContentTypes]=useState([]);
   const [contentTypeOpen,setContentTypeOpen]=useState(false);
@@ -108,6 +108,18 @@ export default function ListView(){
     try{localStorage.setItem(POSTS_CACHE_KEY,JSON.stringify(next))}catch{}
     return next;
   }).catch(()=>null).finally(()=>setPostsLoading(false));
+
+  useEffect(()=>{
+    api.get('/settings').then(r=>{
+      const values=Array.isArray(r?.data?.content_types)?r.data.content_types:[];
+      setContentTypes(values.map(value=>String(value||'').trim()).filter(Boolean));
+    }).catch(()=>setContentTypes([]));
+  },[]);
+
+  const availableContentTypes=useMemo(()=>Array.from(new Set([
+    ...contentTypes,
+    ...posts.map(post=>String(post?.content_type||'').trim()).filter(Boolean),
+  ])),[contentTypes,posts]);
 
   useEffect(()=>{
     load();
@@ -275,7 +287,7 @@ export default function ListView(){
               <strong style={{fontSize:13}}>Content Type</strong>
               <button type="button" onClick={clearContentTypes} disabled={!selectedContentTypes.length} style={{border:0,background:'transparent',fontSize:12,fontWeight:600,cursor:selectedContentTypes.length?'pointer':'default',opacity:selectedContentTypes.length?1:.45}}>Clear</button>
             </div>
-            {CONTENT_TYPES.map(type=><label key={type} style={{display:'flex',alignItems:'center',gap:9,padding:'8px 7px',borderRadius:7,cursor:'pointer',fontSize:13}}>
+            {availableContentTypes.map(type=><label key={type} style={{display:'flex',alignItems:'center',gap:9,padding:'8px 7px',borderRadius:7,cursor:'pointer',fontSize:13}}>
               <input type="checkbox" checked={selectedContentTypes.includes(type)} onChange={()=>toggleContentType(type)} />
               <span>{type}</span>
             </label>)}
