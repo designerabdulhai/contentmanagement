@@ -75,6 +75,23 @@ async function contentColumns(db) {
   return new Set((result.results || []).map((row) => String(row.name)));
 }
 
+// The Worker applies this small additive schema update using its D1 binding.
+// This avoids requiring a separate database credential in GitHub Actions.
+async function ensureClientVideoColumn(db) {
+  let columns = await contentColumns(db);
+  if (columns.has('client_video')) return;
+
+  try {
+    await db.prepare(
+      'ALTER TABLE contents ADD COLUMN client_video INTEGER NOT NULL DEFAULT 0'
+    ).run();
+  } catch (error) {
+    // Another request may have applied the same additive change concurrently.
+    columns = await contentColumns(db);
+    if (!columns.has('client_video')) throw error;
+  }
+}
+
 const WRITABLE_FIELDS = [
   'name',
   'channel',
@@ -250,6 +267,13 @@ export async function handleContents(request, env) {
 
   const user = await requireAuth(request, env.DB);
   if (!user) return json({ error: 'authentication required' }, 401);
+
+  try {
+    await ensureClientVideoColumn(env.DB);
+  } catch (error) {
+    console.error('Client Video schema update failed:', error?.message || error);
+    return json({ error: 'unable to prepare Client Video field' }, 500);
+  }
 
   const url = new URL(request.url);
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
