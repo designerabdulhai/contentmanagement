@@ -717,6 +717,34 @@ async function handle(request, env) {
     return json(settingsObject(result.results || []));
   }
 
+  // Persist editable Settings values. The client sends arrays for comma-separated
+  // options; store a normalized comma-separated value for the settingsObject reader.
+  const settingMatch = path.match(/^\/api\/settings\/([a-z0-9_]+)$/i);
+  if (method === 'PUT' && settingMatch) {
+    const key = settingMatch[1];
+    const payload = await readJson(request);
+    const raw = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.value)
+        ? payload.value
+        : payload?.value !== undefined
+          ? [payload.value]
+          : [];
+
+    const values = [...new Set(raw
+      .map(value => String(value ?? '').trim())
+      .filter(Boolean))];
+    const storedValue = values.join(',');
+
+    await db.prepare(`
+      INSERT INTO settings (key, value)
+      VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).bind(key, storedValue).run();
+
+    return json({ ok: true, key, value: values });
+  }
+
   // TEMPLATES
   if (method === 'GET' && path === '/api/templates') {
     const result = await db
